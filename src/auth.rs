@@ -1,10 +1,10 @@
-use actix_web::{post, web, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
 use chrono::Utc;
-use jsonwebtoken::{encode, decode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::Serialize;
 use sqlx::PgPool;
 use validator::Validate;
@@ -63,6 +63,17 @@ pub fn decode_token(token: &str, jwt_secret: &str) -> Result<TokenClaims, AppErr
     .map_err(|e| AppError::Unauthorized(format!("Invalid token: {}", e)))
 }
 
+fn extract_token(req: &HttpRequest) -> Result<String, AppError> {
+    req.headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .map(|t| t.to_string())
+        .ok_or_else(|| {
+            AppError::Unauthorized("Missing or invalid Authorization header".to_string())
+        })
+}
+
 #[post("/auth/register")]
 pub async fn register(
     pool: web::Data<PgPool>,
@@ -74,13 +85,11 @@ pub async fn register(
         .map_err(|e| AppError::ValidationError(e.to_string()))?;
 
     // Check if email already exists
-    let existing_user = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM users WHERE email = $1"
-    )
-    .bind(&body.email)
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(|e| AppError::InternalError(e.to_string()))?;
+    let existing_user = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE email = $1")
+        .bind(&body.email)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
 
     if existing_user > 0 {
         return Err(AppError::Conflict("Email already exists".to_string()));
@@ -132,7 +141,9 @@ pub async fn login(
     // Verify password
     let is_valid = verify_password(&body.password, &user.password_hash)?;
     if !is_valid {
-        return Err(AppError::Unauthorized("Invalid email or password".to_string()));
+        return Err(AppError::Unauthorized(
+            "Invalid email or password".to_string(),
+        ));
     }
 
     // Create JWT
@@ -142,6 +153,27 @@ pub async fn login(
         token,
         user: UserResponseDto::from_user(user),
     }))
+}
+
+#[get("/auth/me")]
+pub async fn me(
+    req: HttpRequest,
+    pool: web::Data<PgPool>,
+    jwt_secret: web::Data<String>,
+) -> Result<HttpResponse, AppError> {
+    let token = extract_token(&req)?;
+    let claims = decode_token(&token, jwt_secret.get_ref())?;
+
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, email, password_hash, full_name, created_at, updated_at FROM users WHERE id = $1",
+    )
+    .bind(claims.sub)
+    .fetch_optional(pool.get_ref())
+    .await
+    .map_err(|e| AppError::InternalError(e.to_string()))?
+    .ok_or_else(|| AppError::Unauthorized("User not found".to_string()))?;
+
+    Ok(HttpResponse::Ok().json(UserResponseDto::from_user(user)))
 }
 
 #[cfg(test)]
@@ -248,9 +280,13 @@ mod tests {
         let now = Utc::now().timestamp() as usize;
         let expected_exp = now + (24 * 60 * 60);
 
-        assert!(claims.exp >= expected_exp - 5 && claims.exp <= expected_exp + 5,
-            "Expiration should be ~24 hours from now");
-        assert!(claims.iat >= now - 5 && claims.iat <= now + 5,
-            "Issued at should be close to now");
+        assert!(
+            claims.exp >= expected_exp - 5 && claims.exp <= expected_exp + 5,
+            "Expiration should be ~24 hours from now"
+        );
+        assert!(
+            claims.iat >= now - 5 && claims.iat <= now + 5,
+            "Issued at should be close to now"
+        );
     }
 }

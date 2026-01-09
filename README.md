@@ -21,6 +21,7 @@ Server runs on `http://localhost:8080`
 - `GET /health` - health check
 - `POST /auth/register` - create account
 - `POST /auth/login` - get JWT token
+- `GET /auth/me` - get current user (requires Bearer token)
 
 ## Dev
 

@@ -35,6 +35,7 @@ async fn main() -> std::io::Result<()> {
             .service(health_check)
             .service(auth::register)
             .service(auth::login)
+            .service(auth::me)
     })
     .bind(("0.0.0.0", 8080))?
     .run()
