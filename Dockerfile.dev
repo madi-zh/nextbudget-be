@@ -1,0 +1,17 @@
+FROM rust:1.85
+
+WORKDIR /app
+
+# Install cargo-watch for hot reloading
+RUN cargo install cargo-watch --locked
+
+# Copy manifests first for dependency caching
+COPY Cargo.toml Cargo.lock* ./
+
+# Create dummy src to build dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build || true
+RUN rm -rf src
+
+# Source files will be mounted via volume
+CMD ["cargo", "watch", "-x", "run"]
