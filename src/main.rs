@@ -33,8 +33,11 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(jwt_secret.clone()))
             .service(health_check)
+            // Auth endpoints
             .service(auth::register)
             .service(auth::login)
+            .service(auth::refresh)
+            .service(auth::logout)
             .service(auth::me)
     })
     .bind(("0.0.0.0", 8080))?

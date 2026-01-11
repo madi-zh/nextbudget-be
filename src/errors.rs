@@ -6,6 +6,8 @@ use std::fmt;
 pub enum AppError {
     ValidationError(String),
     Unauthorized(String),
+    Forbidden(String),
+    NotFound(String),
     Conflict(String),
     InternalError(String),
 }
@@ -21,6 +23,8 @@ impl fmt::Display for AppError {
         match self {
             AppError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
             AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
+            AppError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
+            AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
             AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
             AppError::InternalError(msg) => write!(f, "Internal error: {}", msg),
         }
@@ -40,6 +44,16 @@ impl ResponseError for AppError {
                 "UNAUTHORIZED",
                 msg.clone(),
             ),
+            AppError::Forbidden(msg) => (
+                actix_web::http::StatusCode::FORBIDDEN,
+                "FORBIDDEN",
+                msg.clone(),
+            ),
+            AppError::NotFound(msg) => (
+                actix_web::http::StatusCode::NOT_FOUND,
+                "NOT_FOUND",
+                msg.clone(),
+            ),
             AppError::Conflict(msg) => (
                 actix_web::http::StatusCode::CONFLICT,
                 "CONFLICT",
@@ -56,5 +70,15 @@ impl ResponseError for AppError {
             error: error_type.to_string(),
             message,
         })
+    }
+}
+
+// Convenience conversion from sqlx::Error
+impl From<sqlx::Error> for AppError {
+    fn from(err: sqlx::Error) -> Self {
+        match err {
+            sqlx::Error::RowNotFound => AppError::NotFound("Resource not found".to_string()),
+            _ => AppError::InternalError(err.to_string()),
+        }
     }
 }

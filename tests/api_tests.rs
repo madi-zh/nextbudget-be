@@ -29,7 +29,9 @@ async fn test_register_success() {
 
     assert_eq!(response.status(), 201);
     let body: Value = response.json().await;
-    assert!(body["token"].is_string());
+    assert!(body["access_token"].is_string());
+    assert!(body["refresh_token"].is_string());
+    assert_eq!(body["token_type"], "Bearer");
     assert_eq!(body["user"]["email"], email);
     assert_eq!(body["user"]["full_name"], "New User");
 }
@@ -86,7 +88,7 @@ async fn test_register_short_password() {
     assert_eq!(response.status(), 400);
     let body: Value = response.json().await;
     assert_eq!(body["error"], "VALIDATION_ERROR");
-    assert!(body["message"].as_str().unwrap().contains("6 characters"));
+    assert!(body["message"].as_str().unwrap().contains("8 characters"));
 }
 
 #[actix_rt::test]
@@ -112,7 +114,9 @@ async fn test_login_success() {
 
     assert_eq!(response.status(), 200);
     let body: Value = response.json().await;
-    assert!(body["token"].is_string());
+    assert!(body["access_token"].is_string());
+    assert!(body["refresh_token"].is_string());
+    assert_eq!(body["token_type"], "Bearer");
     assert_eq!(body["user"]["email"], email);
 }
 
@@ -121,17 +125,17 @@ async fn test_login_wrong_password() {
     let app = TestApp::new().await;
     let email = app.unique_email("wrongpass");
 
-    // Register a user
+    // Register a user (password must be at least 8 chars)
     let register_payload = json!({
         "email": email,
-        "password": "correct_password"
+        "password": "correct_password123"
     });
     app.post("/auth/register", &register_payload).await;
 
     // Try to login with wrong password
     let login_payload = json!({
         "email": email,
-        "password": "wrong_password"
+        "password": "wrong_password123"
     });
 
     let response = app.post("/auth/login", &login_payload).await;
@@ -170,9 +174,13 @@ async fn test_token_is_valid_jwt() {
 
     let response = app.post("/auth/register", &payload).await;
     let body: Value = response.json().await;
-    let token = body["token"].as_str().unwrap();
+    let access_token = body["access_token"].as_str().unwrap();
+    let refresh_token = body["refresh_token"].as_str().unwrap();
 
-    // JWT should have 3 parts
-    let parts: Vec<&str> = token.split('.').collect();
-    assert_eq!(parts.len(), 3, "Token should be valid JWT format");
+    // Access token (JWT) should have 3 parts
+    let parts: Vec<&str> = access_token.split('.').collect();
+    assert_eq!(parts.len(), 3, "Access token should be valid JWT format");
+
+    // Refresh token should be 64 hex characters
+    assert_eq!(refresh_token.len(), 64, "Refresh token should be 64 hex characters");
 }
