@@ -1,7 +1,7 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use validator::Validate;
 
 // ============================================================================
@@ -60,11 +60,11 @@ pub struct LoginDto {
 /// JWT access token claims - short-lived (15 minutes)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
-    pub sub: Uuid,           // User ID
-    pub email: String,       // User email
+    pub sub: Uuid,            // User ID
+    pub email: String,        // User email
     pub name: Option<String>, // User display name
-    pub iat: usize,          // Issued at
-    pub exp: usize,          // Expiration
+    pub iat: usize,           // Issued at
+    pub exp: usize,           // Expiration
 }
 
 /// Refresh token stored in database
@@ -90,7 +90,7 @@ pub struct AuthTokenResponse {
     pub access_token: String,
     pub refresh_token: String,
     pub token_type: String,
-    pub expires_in: u64,       // Access token expiry in seconds
+    pub expires_in: u64, // Access token expiry in seconds
     pub user: UserResponseDto,
 }
 

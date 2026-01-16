@@ -1,5 +1,7 @@
 mod auth;
+mod budget;
 mod errors;
+mod extractors;
 mod models;
 
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
@@ -39,6 +41,15 @@ async fn main() -> std::io::Result<()> {
             .service(auth::refresh)
             .service(auth::logout)
             .service(auth::me)
+            // Budget endpoints
+            .service(budget::list_budgets)
+            .service(budget::get_budget_by_month_year)
+            .service(budget::get_budget)
+            .service(budget::create_budget)
+            .service(budget::update_income)
+            .service(budget::update_savings_rate)
+            .service(budget::update_budget)
+            .service(budget::delete_budget)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

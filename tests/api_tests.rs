@@ -182,5 +182,9 @@ async fn test_token_is_valid_jwt() {
     assert_eq!(parts.len(), 3, "Access token should be valid JWT format");
 
     // Refresh token should be 64 hex characters
-    assert_eq!(refresh_token.len(), 64, "Refresh token should be 64 hex characters");
+    assert_eq!(
+        refresh_token.len(),
+        64,
+        "Refresh token should be 64 hex characters"
+    );
 }

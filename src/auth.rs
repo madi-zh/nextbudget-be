@@ -13,8 +13,8 @@ use validator::Validate;
 
 use crate::errors::AppError;
 use crate::models::{
-    AuthTokenResponse, CreateUserDto, LoginDto, RefreshToken, RefreshTokenDto,
-    TokenClaims, User, UserResponseDto,
+    AuthTokenResponse, CreateUserDto, LoginDto, RefreshToken, RefreshTokenDto, TokenClaims, User,
+    UserResponseDto,
 };
 
 // Token expiration constants
@@ -128,10 +128,7 @@ async fn create_refresh_token(pool: &PgPool, user_id: Uuid) -> Result<String, Ap
 }
 
 /// Validate a refresh token and return the associated token record
-async fn validate_refresh_token(
-    pool: &PgPool,
-    raw_token: &str,
-) -> Result<RefreshToken, AppError> {
+async fn validate_refresh_token(pool: &PgPool, raw_token: &str) -> Result<RefreshToken, AppError> {
     let token_hash = hash_refresh_token(raw_token);
 
     let token = sqlx::query_as::<_, RefreshToken>(
@@ -233,11 +230,7 @@ pub async fn register(
     let access_token = create_access_token(&user, jwt_secret.get_ref())?;
     let refresh_token = create_refresh_token(pool.get_ref(), user.id).await?;
 
-    Ok(HttpResponse::Created().json(AuthTokenResponse::new(
-        access_token,
-        refresh_token,
-        &user,
-    )))
+    Ok(HttpResponse::Created().json(AuthTokenResponse::new(access_token, refresh_token, &user)))
 }
 
 #[post("/auth/login")]
@@ -268,11 +261,7 @@ pub async fn login(
     let access_token = create_access_token(&user, jwt_secret.get_ref())?;
     let refresh_token = create_refresh_token(pool.get_ref(), user.id).await?;
 
-    Ok(HttpResponse::Ok().json(AuthTokenResponse::new(
-        access_token,
-        refresh_token,
-        &user,
-    )))
+    Ok(HttpResponse::Ok().json(AuthTokenResponse::new(access_token, refresh_token, &user)))
 }
 
 #[post("/auth/refresh")]
@@ -322,7 +311,8 @@ pub async fn logout(
     // If refresh token provided, revoke only that token
     // Otherwise, revoke all tokens for the user
     if let Some(refresh_body) = body {
-        let token_record = validate_refresh_token(pool.get_ref(), &refresh_body.refresh_token).await;
+        let token_record =
+            validate_refresh_token(pool.get_ref(), &refresh_body.refresh_token).await;
         if let Ok(record) = token_record {
             // Verify the token belongs to this user
             if record.user_id == claims.sub {
@@ -445,6 +435,9 @@ mod tests {
     fn test_hash_refresh_token_different_inputs() {
         let hash1 = hash_refresh_token("token1");
         let hash2 = hash_refresh_token("token2");
-        assert_ne!(hash1, hash2, "Different tokens should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Different tokens should produce different hashes"
+        );
     }
 }
