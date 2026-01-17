@@ -1,4 +1,5 @@
 use actix_web::{test, web, App};
+use secrecy::Secret;
 use serde_json::Value;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -38,7 +39,7 @@ impl TestApp {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let test_id = format!("{}_{}", timestamp, counter);
+        let test_id = format!("{timestamp}_{counter}");
 
         let database_url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://user:password@localhost:5432/budget_db".to_string());
@@ -54,14 +55,15 @@ impl TestApp {
 
     /// Generate a unique email for this test run
     pub fn unique_email(&self, prefix: &str) -> String {
-        format!("{}_{}_@test.com", prefix, self.test_id)
+        format!("{prefix}_{}_@test.com", self.test_id)
     }
 
     pub async fn get(&self, path: &str) -> TestResponse {
+        let jwt_secret = Secret::new(JWT_SECRET.to_string());
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(self.pool.clone()))
-                .app_data(web::Data::new(JWT_SECRET.to_string()))
+                .app_data(web::Data::new(jwt_secret))
                 .route("/health", web::get().to(health_handler))
                 .service(register)
                 .service(login),
@@ -78,10 +80,11 @@ impl TestApp {
     }
 
     pub async fn post(&self, path: &str, payload: &Value) -> TestResponse {
+        let jwt_secret = Secret::new(JWT_SECRET.to_string());
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(self.pool.clone()))
-                .app_data(web::Data::new(JWT_SECRET.to_string()))
+                .app_data(web::Data::new(jwt_secret))
                 .route("/health", web::get().to(health_handler))
                 .service(register)
                 .service(login),

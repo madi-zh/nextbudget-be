@@ -1,11 +1,13 @@
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
+    Algorithm, Argon2, Params, Version,
 };
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use lazy_static::lazy_static;
 use rand::Rng;
+use secrecy::{ExposeSecret, Secret};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -21,23 +23,32 @@ use crate::models::{
 const ACCESS_TOKEN_EXPIRY_MINUTES: i64 = 15;
 const REFRESH_TOKEN_EXPIRY_DAYS: i64 = 7;
 
+lazy_static! {
+    /// Configured Argon2 instance with explicit parameters for consistent hashing
+    /// Parameters: memory=19456 KiB, iterations=2, parallelism=1
+    static ref ARGON2: Argon2<'static> = Argon2::new(
+        Algorithm::Argon2id,
+        Version::V0x13,
+        Params::new(19456, 2, 1, None).expect("Invalid Argon2 params")
+    );
+}
+
 // ============================================================================
 // Password Utilities
 // ============================================================================
 
 pub fn hash_password(password: &str) -> Result<String, AppError> {
     let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    argon2
+    ARGON2
         .hash_password(password.as_bytes(), &salt)
         .map(|hash| hash.to_string())
-        .map_err(|e| AppError::InternalError(format!("Failed to hash password: {}", e)))
+        .map_err(|e| AppError::InternalError(format!("Failed to hash password: {e}")))
 }
 
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
     let parsed_hash = PasswordHash::new(hash)
-        .map_err(|e| AppError::InternalError(format!("Invalid password hash: {}", e)))?;
-    Ok(Argon2::default()
+        .map_err(|e| AppError::InternalError(format!("Invalid password hash: {e}")))?;
+    Ok(ARGON2
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())
 }
@@ -46,7 +57,7 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
 // JWT Access Token Utilities
 // ============================================================================
 
-pub fn create_access_token(user: &User, jwt_secret: &str) -> Result<String, AppError> {
+pub fn create_access_token(user: &User, jwt_secret: &Secret<String>) -> Result<String, AppError> {
     let now = Utc::now();
     let expires_at = now + Duration::minutes(ACCESS_TOKEN_EXPIRY_MINUTES);
 
@@ -61,19 +72,19 @@ pub fn create_access_token(user: &User, jwt_secret: &str) -> Result<String, AppE
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(jwt_secret.as_bytes()),
+        &EncodingKey::from_secret(jwt_secret.expose_secret().as_bytes()),
     )
-    .map_err(|e| AppError::InternalError(format!("Failed to create access token: {}", e)))
+    .map_err(|e| AppError::InternalError(format!("Failed to create access token: {e}")))
 }
 
-pub fn decode_token(token: &str, jwt_secret: &str) -> Result<TokenClaims, AppError> {
+pub fn decode_token(token: &str, jwt_secret: &Secret<String>) -> Result<TokenClaims, AppError> {
     decode::<TokenClaims>(
         token,
-        &DecodingKey::from_secret(jwt_secret.as_bytes()),
+        &DecodingKey::from_secret(jwt_secret.expose_secret().as_bytes()),
         &Validation::default(),
     )
     .map(|data| data.claims)
-    .map_err(|e| AppError::Unauthorized(format!("Invalid token: {}", e)))
+    .map_err(|e| AppError::Unauthorized(format!("Invalid token: {e}")))
 }
 
 pub fn extract_token(req: &HttpRequest) -> Result<String, AppError> {
@@ -122,7 +133,7 @@ async fn create_refresh_token(pool: &PgPool, user_id: Uuid) -> Result<String, Ap
     .bind(expires_at)
     .execute(pool)
     .await
-    .map_err(|e| AppError::InternalError(format!("Failed to store refresh token: {}", e)))?;
+    .map_err(|e| AppError::InternalError(format!("Failed to store refresh token: {e}")))?;
 
     Ok(raw_token)
 }
@@ -131,7 +142,7 @@ async fn create_refresh_token(pool: &PgPool, user_id: Uuid) -> Result<String, Ap
 async fn validate_refresh_token(pool: &PgPool, raw_token: &str) -> Result<RefreshToken, AppError> {
     let token_hash = hash_refresh_token(raw_token);
 
-    let token = sqlx::query_as::<_, RefreshToken>(
+    sqlx::query_as::<_, RefreshToken>(
         r#"
         SELECT id, user_id, token_hash, expires_at, created_at, revoked_at
         FROM refresh_tokens
@@ -144,9 +155,7 @@ async fn validate_refresh_token(pool: &PgPool, raw_token: &str) -> Result<Refres
     .fetch_optional(pool)
     .await
     .map_err(|e| AppError::InternalError(e.to_string()))?
-    .ok_or_else(|| AppError::Unauthorized("Invalid or expired refresh token".to_string()))?;
-
-    Ok(token)
+    .ok_or_else(|| AppError::Unauthorized("Invalid or expired refresh token".to_string()))
 }
 
 /// Revoke a specific refresh token
@@ -161,7 +170,7 @@ async fn revoke_refresh_token(pool: &PgPool, token_id: Uuid) -> Result<(), AppEr
     .bind(token_id)
     .execute(pool)
     .await
-    .map_err(|e| AppError::InternalError(format!("Failed to revoke token: {}", e)))?;
+    .map_err(|e| AppError::InternalError(format!("Failed to revoke token: {e}")))?;
 
     Ok(())
 }
@@ -178,9 +187,58 @@ async fn revoke_all_user_tokens(pool: &PgPool, user_id: Uuid) -> Result<u64, App
     .bind(user_id)
     .execute(pool)
     .await
-    .map_err(|e| AppError::InternalError(format!("Failed to revoke tokens: {}", e)))?;
+    .map_err(|e| AppError::InternalError(format!("Failed to revoke tokens: {e}")))?;
 
     Ok(result.rows_affected())
+}
+
+/// Rotate refresh token atomically (revoke old, create new) within a transaction
+async fn rotate_refresh_token(
+    pool: &PgPool,
+    old_token_id: Uuid,
+    user_id: Uuid,
+) -> Result<String, AppError> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| AppError::InternalError(format!("Failed to begin transaction: {e}")))?;
+
+    // Revoke old token
+    sqlx::query(
+        r#"
+        UPDATE refresh_tokens
+        SET revoked_at = NOW()
+        WHERE id = $1
+        "#,
+    )
+    .bind(old_token_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| AppError::InternalError(format!("Failed to revoke token: {e}")))?;
+
+    // Create new token
+    let raw_token = generate_refresh_token();
+    let token_hash = hash_refresh_token(&raw_token);
+    let expires_at = Utc::now() + Duration::days(REFRESH_TOKEN_EXPIRY_DAYS);
+
+    sqlx::query(
+        r#"
+        INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(user_id)
+    .bind(&token_hash)
+    .bind(expires_at)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| AppError::InternalError(format!("Failed to store refresh token: {e}")))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| AppError::InternalError(format!("Failed to commit transaction: {e}")))?;
+
+    Ok(raw_token)
 }
 
 // ============================================================================
@@ -190,7 +248,7 @@ async fn revoke_all_user_tokens(pool: &PgPool, user_id: Uuid) -> Result<u64, App
 #[post("/auth/register")]
 pub async fn register(
     pool: web::Data<PgPool>,
-    jwt_secret: web::Data<String>,
+    jwt_secret: web::Data<Secret<String>>,
     body: web::Json<CreateUserDto>,
 ) -> Result<HttpResponse, AppError> {
     // Validate input
@@ -236,7 +294,7 @@ pub async fn register(
 #[post("/auth/login")]
 pub async fn login(
     pool: web::Data<PgPool>,
-    jwt_secret: web::Data<String>,
+    jwt_secret: web::Data<Secret<String>>,
     body: web::Json<LoginDto>,
 ) -> Result<HttpResponse, AppError> {
     // Find user by email
@@ -267,7 +325,7 @@ pub async fn login(
 #[post("/auth/refresh")]
 pub async fn refresh(
     pool: web::Data<PgPool>,
-    jwt_secret: web::Data<String>,
+    jwt_secret: web::Data<Secret<String>>,
     body: web::Json<RefreshTokenDto>,
 ) -> Result<HttpResponse, AppError> {
     // Validate the refresh token
@@ -283,12 +341,12 @@ pub async fn refresh(
     .map_err(|e| AppError::InternalError(e.to_string()))?
     .ok_or_else(|| AppError::Unauthorized("User not found".to_string()))?;
 
-    // Revoke the old refresh token (token rotation for security)
-    revoke_refresh_token(pool.get_ref(), token_record.id).await?;
+    // Rotate refresh token atomically (revoke old, create new)
+    let new_refresh_token =
+        rotate_refresh_token(pool.get_ref(), token_record.id, user.id).await?;
 
-    // Create new tokens
+    // Create new access token
     let access_token = create_access_token(&user, jwt_secret.get_ref())?;
-    let new_refresh_token = create_refresh_token(pool.get_ref(), user.id).await?;
 
     Ok(HttpResponse::Ok().json(AuthTokenResponse::new(
         access_token,
@@ -301,7 +359,7 @@ pub async fn refresh(
 pub async fn logout(
     req: HttpRequest,
     pool: web::Data<PgPool>,
-    jwt_secret: web::Data<String>,
+    jwt_secret: web::Data<Secret<String>>,
     body: Option<web::Json<RefreshTokenDto>>,
 ) -> Result<HttpResponse, AppError> {
     // Try to get user ID from access token
@@ -336,7 +394,7 @@ pub async fn logout(
 pub async fn me(
     req: HttpRequest,
     pool: web::Data<PgPool>,
-    jwt_secret: web::Data<String>,
+    jwt_secret: web::Data<Secret<String>>,
 ) -> Result<HttpResponse, AppError> {
     let token = extract_token(&req)?;
     let claims = decode_token(&token, jwt_secret.get_ref())?;
@@ -351,17 +409,6 @@ pub async fn me(
     .ok_or_else(|| AppError::Unauthorized("User not found".to_string()))?;
 
     Ok(HttpResponse::Ok().json(UserResponseDto::from_user(&user)))
-}
-
-// ============================================================================
-// Helper for extracting authenticated user (for use in other modules)
-// ============================================================================
-
-/// Extract user ID from request's JWT token
-pub fn get_user_id_from_request(req: &HttpRequest, jwt_secret: &str) -> Result<Uuid, AppError> {
-    let token = extract_token(req)?;
-    let claims = decode_token(&token, jwt_secret)?;
-    Ok(claims.sub)
 }
 
 // ============================================================================

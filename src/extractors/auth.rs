@@ -1,5 +1,6 @@
 use actix_web::{dev::Payload, web, FromRequest, HttpRequest};
 use futures::future::{err, ok, Ready};
+use secrecy::Secret;
 use uuid::Uuid;
 
 use crate::auth::decode_token;
@@ -16,7 +17,7 @@ impl FromRequest for AuthenticatedUser {
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
         // Extract JWT secret from app data
-        let jwt_secret = match req.app_data::<web::Data<String>>() {
+        let jwt_secret = match req.app_data::<web::Data<Secret<String>>>() {
             Some(secret) => secret.get_ref().clone(),
             None => {
                 return err(AppError::InternalError(
