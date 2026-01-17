@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
-use validator::Validate;
+use validator::{Validate, ValidationError};
 
 // ============================================================================
 // User Models
@@ -19,12 +19,27 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Validate password complexity: at least one uppercase, one lowercase, and one digit
+fn validate_password_complexity(password: &str) -> Result<(), ValidationError> {
+    let has_lowercase = password.chars().any(|c| c.is_ascii_lowercase());
+    let has_uppercase = password.chars().any(|c| c.is_ascii_uppercase());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+
+    if has_lowercase && has_uppercase && has_digit {
+        Ok(())
+    } else {
+        Err(ValidationError::new("password_complexity"))
+    }
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateUserDto {
     #[validate(email)]
     pub email: String,
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    #[validate(custom(function = "validate_password_complexity", message = "Password must contain at least one uppercase letter, one lowercase letter, and one number"))]
     pub password: String,
+    #[validate(length(max = 100, message = "Full name must be at most 100 characters"))]
     pub full_name: Option<String>,
 }
 
@@ -89,7 +104,7 @@ pub struct RefreshTokenDto {
 pub struct AuthTokenResponse {
     pub access_token: String,
     pub refresh_token: String,
-    pub token_type: String,
+    pub token_type: &'static str,
     pub expires_in: u64, // Access token expiry in seconds
     pub user: UserResponseDto,
 }
@@ -99,7 +114,7 @@ impl AuthTokenResponse {
         Self {
             access_token,
             refresh_token,
-            token_type: "Bearer".to_string(),
+            token_type: "Bearer",
             expires_in: 15 * 60, // 15 minutes
             user: UserResponseDto::from_user(user),
         }

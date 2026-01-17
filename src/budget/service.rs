@@ -200,16 +200,13 @@ impl BudgetService {
         .map_err(|e| AppError::InternalError(e.to_string()))
     }
 
-    /// Update only the income field.
+    /// Update only the income field (optimized single query with ownership check).
     pub async fn update_income(
         pool: &PgPool,
         budget_id: Uuid,
         owner_id: Uuid,
         dto: &UpdateIncomeDto,
     ) -> Result<Budget, AppError> {
-        // Verify ownership first
-        let _ = Self::get_budget_by_id(pool, budget_id, owner_id).await?;
-
         sqlx::query_as::<_, Budget>(
             r#"
             UPDATE budgets
@@ -221,21 +218,19 @@ impl BudgetService {
         .bind(dto.total_income)
         .bind(budget_id)
         .bind(owner_id)
-        .fetch_one(pool)
+        .fetch_optional(pool)
         .await
-        .map_err(|e| AppError::InternalError(e.to_string()))
+        .map_err(|e| AppError::InternalError(e.to_string()))?
+        .ok_or_else(|| AppError::NotFound("Budget not found".to_string()))
     }
 
-    /// Update only the savings rate field.
+    /// Update only the savings rate field (optimized single query with ownership check).
     pub async fn update_savings_rate(
         pool: &PgPool,
         budget_id: Uuid,
         owner_id: Uuid,
         dto: &UpdateSavingsRateDto,
     ) -> Result<Budget, AppError> {
-        // Verify ownership first
-        let _ = Self::get_budget_by_id(pool, budget_id, owner_id).await?;
-
         sqlx::query_as::<_, Budget>(
             r#"
             UPDATE budgets
@@ -247,9 +242,10 @@ impl BudgetService {
         .bind(dto.savings_rate)
         .bind(budget_id)
         .bind(owner_id)
-        .fetch_one(pool)
+        .fetch_optional(pool)
         .await
-        .map_err(|e| AppError::InternalError(e.to_string()))
+        .map_err(|e| AppError::InternalError(e.to_string()))?
+        .ok_or_else(|| AppError::NotFound("Budget not found".to_string()))
     }
 
     /// Delete a budget.

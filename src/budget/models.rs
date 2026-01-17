@@ -3,12 +3,30 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
-use validator::Validate;
+use validator::{Validate, ValidationError};
+
+/// Validate that a Decimal is non-negative
+fn validate_non_negative(value: &Decimal) -> Result<(), ValidationError> {
+    if *value < Decimal::ZERO {
+        return Err(ValidationError::new("must be non-negative"));
+    }
+    Ok(())
+}
+
+/// Validate that a Decimal is between 0 and 100 (inclusive)
+fn validate_percentage(value: &Decimal) -> Result<(), ValidationError> {
+    let hundred = Decimal::from(100);
+    if *value < Decimal::ZERO || *value > hundred {
+        return Err(ValidationError::new("must be between 0 and 100"));
+    }
+    Ok(())
+}
 
 /// Database entity for budgets
 #[derive(Debug, Clone, FromRow)]
 pub struct Budget {
     pub id: Uuid,
+    #[allow(dead_code)] // Used in SQL queries for ownership check
     pub owner_id: Uuid,
     pub month: i16,
     pub year: i16,
@@ -70,6 +88,19 @@ pub struct CreateBudgetDto {
     pub savings_rate: Option<Decimal>,
 }
 
+impl CreateBudgetDto {
+    /// Validate decimal fields that can't use derive macro
+    pub fn validate_decimals(&self) -> Result<(), ValidationError> {
+        if let Some(income) = &self.total_income {
+            validate_non_negative(income)?;
+        }
+        if let Some(rate) = &self.savings_rate {
+            validate_percentage(rate)?;
+        }
+        Ok(())
+    }
+}
+
 /// DTO for updating a budget (all fields optional for PATCH semantics)
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
@@ -85,10 +116,24 @@ pub struct UpdateBudgetDto {
     pub savings_rate: Option<Decimal>,
 }
 
+impl UpdateBudgetDto {
+    /// Validate decimal fields that can't use derive macro
+    pub fn validate_decimals(&self) -> Result<(), ValidationError> {
+        if let Some(income) = &self.total_income {
+            validate_non_negative(income)?;
+        }
+        if let Some(rate) = &self.savings_rate {
+            validate_percentage(rate)?;
+        }
+        Ok(())
+    }
+}
+
 /// DTO for updating income only
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateIncomeDto {
+    #[validate(custom(function = "validate_non_negative"))]
     pub total_income: Decimal,
 }
 
@@ -96,6 +141,7 @@ pub struct UpdateIncomeDto {
 #[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSavingsRateDto {
+    #[validate(custom(function = "validate_percentage"))]
     pub savings_rate: Decimal,
 }
 

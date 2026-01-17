@@ -74,6 +74,8 @@ pub async fn create_budget(
 ) -> Result<HttpResponse, AppError> {
     body.validate()
         .map_err(|e| AppError::ValidationError(e.to_string()))?;
+    body.validate_decimals()
+        .map_err(|e| AppError::ValidationError(e.to_string()))?;
 
     let budget = BudgetService::create_budget(pool.get_ref(), auth.user_id, &body).await?;
 
@@ -89,6 +91,8 @@ pub async fn update_budget(
     body: web::Json<UpdateBudgetDto>,
 ) -> Result<HttpResponse, AppError> {
     body.validate()
+        .map_err(|e| AppError::ValidationError(e.to_string()))?;
+    body.validate_decimals()
         .map_err(|e| AppError::ValidationError(e.to_string()))?;
 
     let budget = BudgetService::update_budget(pool.get_ref(), path.id, auth.user_id, &body).await?;
