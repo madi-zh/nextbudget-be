@@ -2,7 +2,6 @@ mod auth;
 mod budget;
 mod errors;
 mod extractors;
-mod models;
 
 use actix_cors::Cors;
 use actix_governor::{Governor, GovernorConfigBuilder};

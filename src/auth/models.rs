@@ -4,19 +4,6 @@ use sqlx::FromRow;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
-/// Validate password complexity: at least one uppercase, one lowercase, and one digit
-fn validate_password_complexity(password: &str) -> Result<(), ValidationError> {
-    let has_lowercase = password.chars().any(|c| c.is_ascii_lowercase());
-    let has_uppercase = password.chars().any(|c| c.is_ascii_uppercase());
-    let has_digit = password.chars().any(|c| c.is_ascii_digit());
-
-    if has_lowercase && has_uppercase && has_digit {
-        Ok(())
-    } else {
-        Err(ValidationError::new("password_complexity"))
-    }
-}
-
 // ============================================================================
 // User Models
 // ============================================================================
@@ -30,6 +17,19 @@ pub struct User {
     pub full_name: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// Validate password complexity: at least one uppercase, one lowercase, and one digit
+fn validate_password_complexity(password: &str) -> Result<(), ValidationError> {
+    let has_lowercase = password.chars().any(|c| c.is_ascii_lowercase());
+    let has_uppercase = password.chars().any(|c| c.is_ascii_uppercase());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+
+    if has_lowercase && has_uppercase && has_digit {
+        Ok(())
+    } else {
+        Err(ValidationError::new("password_complexity"))
+    }
 }
 
 #[derive(Debug, Deserialize, Validate)]
