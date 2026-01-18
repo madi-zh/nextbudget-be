@@ -1,7 +1,10 @@
+mod account;
 mod auth;
 mod budget;
+mod category;
 mod errors;
 mod extractors;
+mod transaction;
 
 use actix_cors::Cors;
 use actix_governor::{Governor, GovernorConfigBuilder};
@@ -49,8 +52,8 @@ async fn main() -> std::io::Result<()> {
     let jwt_secret = Secret::new(jwt_secret);
 
     // Get allowed origins from environment (comma-separated), default to localhost
-    let allowed_origins = env::var("CORS_ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let allowed_origins =
+        env::var("CORS_ALLOWED_ORIGINS").unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     // Configure connection pool with production-ready settings
     let pool = PgPoolOptions::new()
@@ -118,6 +121,30 @@ async fn main() -> std::io::Result<()> {
             .service(budget::update_savings_rate)
             .service(budget::update_budget)
             .service(budget::delete_budget)
+            // Account endpoints (order matters: specific routes before generic {id} routes)
+            .service(account::list_accounts)
+            .service(account::get_accounts_summary)
+            .service(account::get_accounts_by_type)
+            .service(account::get_account)
+            .service(account::create_account)
+            .service(account::update_account_balance)
+            .service(account::update_account)
+            .service(account::delete_account)
+            // Category endpoints (order matters: specific routes before generic {id} routes)
+            .service(category::list_categories)
+            .service(category::get_categories_by_budget)
+            .service(category::get_category)
+            .service(category::create_category)
+            .service(category::update_category)
+            .service(category::delete_category)
+            // Transaction endpoints (order matters: specific routes before generic {id} routes)
+            .service(transaction::list_transactions)
+            .service(transaction::get_by_category)
+            .service(transaction::get_by_categories)
+            .service(transaction::get_transaction)
+            .service(transaction::create_transaction)
+            .service(transaction::update_transaction)
+            .service(transaction::delete_transaction)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

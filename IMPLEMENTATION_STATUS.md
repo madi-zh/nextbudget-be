@@ -1,7 +1,7 @@
 # BudgetFlow Backend - Implementation Status
 
-**Last Updated:** 2026-01-11
-**Overall Progress:** ~35% Complete (Phases 1-2 done, Phases 3-7 remaining)
+**Last Updated:** 2026-01-18
+**Overall Progress:** ~90% Complete (Phases 1-6 done, Phase 7 remaining)
 
 ---
 
@@ -27,148 +27,148 @@ sqlx migrate run
 
 ### Phase 2: Authentication System ✅
 
-**New/Updated Files:**
-- `src/auth.rs` - Complete rewrite with refresh tokens
-- `src/models.rs` - Added TokenClaims, RefreshToken, AuthTokenResponse
-- `src/errors.rs` - Added NotFound, Forbidden variants
-- `src/main.rs` - Registered refresh/logout endpoints
-- `Cargo.toml` - Added sha2, rand, hex, futures, rust_decimal, bigdecimal, lazy_static, regex
-- `tests/api_tests.rs` - Updated for new API format
-
 **Auth Endpoints (5 total):**
 | Method | Endpoint | Status |
 |--------|----------|--------|
-| POST | `/auth/register` | ✅ Updated (returns token pair) |
-| POST | `/auth/login` | ✅ Updated (returns token pair) |
+| POST | `/auth/register` | ✅ Returns token pair |
+| POST | `/auth/login` | ✅ Returns token pair |
 | GET | `/auth/me` | ✅ Working |
-| POST | `/auth/refresh` | ✅ NEW - Token rotation |
-| POST | `/auth/logout` | ✅ NEW - Revoke sessions |
+| POST | `/auth/refresh` | ✅ Token rotation |
+| POST | `/auth/logout` | ✅ Revoke sessions |
 
-**Key Changes:**
-- Access token: 15 minutes (was 24 hours)
+**Key Features:**
+- Access token: 15 minutes expiry
 - Refresh token: 7 days, stored hashed in DB
-- Password minimum: 8 characters (was 6)
-- TokenClaims now includes: sub, email, name, iat, exp
+- Password minimum: 8 characters with complexity rules
+- TokenClaims: sub, email, name, iat, exp
+
+### Phase 3: Budget Management ✅
+
+**Budget Endpoints (8 total):**
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| GET | `/budgets` | ✅ List with pagination & year filter |
+| GET | `/budgets/{id}` | ✅ Get specific |
+| GET | `/budgets/month/{month}/year/{year}` | ✅ Get by month/year |
+| POST | `/budgets` | ✅ Create (prevents duplicates) |
+| PATCH | `/budgets/{id}` | ✅ Partial update |
+| PATCH | `/budgets/{id}/income` | ✅ Update income only |
+| PATCH | `/budgets/{id}/savings-rate` | ✅ Update savings rate |
+| DELETE | `/budgets/{id}` | ✅ Delete with ownership check |
+
+**Key Features:**
+- Computed fields: savings_target, spending_budget
+- Unique constraint: (owner_id, month, year)
+- Full validation with custom decimal validators
+
+### Phase 4: Account Management ✅
+
+**Account Endpoints (8 total):**
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| GET | `/accounts` | ✅ List user's accounts |
+| GET | `/accounts/{id}` | ✅ Get specific |
+| GET | `/accounts/type/{type}` | ✅ Filter by type |
+| GET | `/accounts/summary` | ✅ With financial totals |
+| POST | `/accounts` | ✅ Create account |
+| PATCH | `/accounts/{id}` | ✅ Update account |
+| PATCH | `/accounts/{id}/balance` | ✅ Update balance only |
+| DELETE | `/accounts/{id}` | ✅ Delete (orphans transactions) |
+
+**Key Features:**
+- Account types: checking, savings, credit
+- Summary with total_savings, total_spending, net_worth
+- Color hex validation (#RRGGBB format)
+
+### Phase 5: Category Management ✅
+
+**Category Endpoints (6 total):**
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| GET | `/categories` | ✅ List all user categories |
+| GET | `/categories/{id}` | ✅ Get specific |
+| GET | `/categories/budget/{budgetId}` | ✅ Get for budget |
+| POST | `/categories` | ✅ Create category |
+| PATCH | `/categories/{id}` | ✅ Update category |
+| DELETE | `/categories/{id}` | ✅ Delete (cascades transactions) |
+
+**Key Features:**
+- Computed spent_amount from transaction SUM
+- Computed remaining_amount (allocated - spent)
+- Budget ownership verification
+
+### Phase 6: Transaction Management ✅ CRITICAL
+
+**Transaction Endpoints (7 total):**
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| GET | `/transactions` | ✅ List with filters |
+| GET | `/transactions/{id}` | ✅ Get specific |
+| GET | `/transactions/category/{categoryId}` | ✅ Get by category |
+| POST | `/transactions/categories` | ✅ Get by multiple categories |
+| POST | `/transactions` | ✅ Create (atomic balance update) |
+| PATCH | `/transactions/{id}` | ✅ Update (atomic balance adjustments) |
+| DELETE | `/transactions/{id}` | ✅ Delete (atomic balance restoration) |
+
+**Key Features:**
+- Transaction types: expense, income, transfer
+- **ATOMIC balance updates** using database transactions
+- Row locking with `FOR UPDATE` to prevent concurrent modification issues
+- Complex update handling: amount change, account change, type change
+- Paginated responses with total count
 
 ---
 
-## Remaining Phases
-
-### Phase 3: Budget Management (8 endpoints) ⏳
-
-**Endpoints to implement:**
-- GET `/budgets` - List all user's budgets
-- GET `/budgets/:id` - Get specific budget
-- GET `/budgets/month/:month/year/:year` - Get budget for month
-- POST `/budgets` - Create budget
-- PATCH `/budgets/:id` - Update budget
-- PATCH `/budgets/:id/income` - Update income only
-- PATCH `/budgets/:id/savings-rate` - Update savings rate
-- DELETE `/budgets/:id` - Delete budget (cascades)
-
-**Files to create:**
-```
-src/budgets/
-├── mod.rs
-├── models.rs
-├── handlers.rs
-└── service.rs
-```
-
-**Detailed plan:** `features/03-budget-management.md`
-
-### Phase 4: Account Management (8 endpoints) ⏳
-
-**Endpoints to implement:**
-- GET `/accounts` - List user's accounts
-- GET `/accounts/:id` - Get specific
-- GET `/accounts/type/:type` - Get by type
-- GET `/accounts/summary` - Get with totals
-- POST `/accounts` - Create account
-- PATCH `/accounts/:id` - Update account
-- PATCH `/accounts/:id/balance` - Update balance only
-- DELETE `/accounts/:id` - Delete (orphans transactions)
-
-**Files to create:**
-```
-src/accounts/
-├── mod.rs
-├── models.rs
-├── handlers.rs
-└── service.rs
-```
-
-**Detailed plan:** `features/06-account-management.md`
-
-### Phase 5: Category Management (6 endpoints) ⏳
-
-**Endpoints to implement:**
-- GET `/categories` - List all categories
-- GET `/categories/:id` - Get specific
-- GET `/categories/budget/:budgetId` - Get for budget
-- POST `/categories` - Create category
-- PATCH `/categories/:id` - Update category
-- DELETE `/categories/:id` - Delete (cascades transactions)
-
-**Key feature:** Compute `spent_amount` from transaction SUM
-
-**Files to create:**
-```
-src/categories/
-├── mod.rs
-├── models.rs
-├── handlers.rs
-└── service.rs
-```
-
-**Detailed plan:** `features/04-category-management.md`
-
-### Phase 6: Transaction Management (7 endpoints) ⏳ CRITICAL
-
-**Endpoints to implement:**
-- GET `/transactions` - List with filters
-- GET `/transactions/:id` - Get specific
-- GET `/transactions/category/:categoryId` - Get by category
-- POST `/transactions/categories` - Get by multiple categories
-- POST `/transactions` - Create (updates account balance)
-- PATCH `/transactions/:id` - Update
-- DELETE `/transactions/:id` - Delete (restores balance)
-
-**CRITICAL:** All balance updates must be atomic (database transactions)
-
-**Files to create:**
-```
-src/transactions/
-├── mod.rs
-├── models.rs
-├── handlers.rs
-└── service.rs
-```
-
-**Detailed plan:** `features/05-transaction-management.md`
+## Remaining Phase
 
 ### Phase 7: Final Verification ⏳
 
-- Run full test suite: `cargo test`
-- Run linter: `cargo clippy`
-- Format code: `cargo fmt`
-- Manual API testing
-- Balance integrity verification
+- [ ] Run full test suite: `cargo test`
+- [ ] Run linter: `cargo clippy`
+- [ ] Format code: `cargo fmt`
+- [ ] Manual API testing
+- [ ] Balance integrity verification
 
 ---
 
-## Feature Plan Files
+## Architecture Overview
 
-All detailed implementation plans are in `features/`:
-
-| File | Content |
-|------|---------|
-| `01-database-schema.md` | Complete migration plan, indexes, constraints |
-| `02-authentication.md` | Auth system with refresh tokens |
-| `03-budget-management.md` | Budget CRUD implementation |
-| `04-category-management.md` | Category CRUD with spent calculation |
-| `05-transaction-management.md` | Transaction CRUD with atomic balance |
-| `06-account-management.md` | Account CRUD with summary |
+```
+src/
+├── main.rs              # Server setup, route registration
+├── lib.rs               # Module exports
+├── errors.rs            # AppError enum with HTTP mapping
+├── extractors/
+│   ├── mod.rs
+│   └── auth.rs          # AuthenticatedUser JWT extractor
+├── auth/
+│   ├── mod.rs
+│   ├── models.rs
+│   ├── handlers.rs
+│   ├── service.rs
+│   ├── jwt.rs
+│   └── password.rs
+├── budget/
+│   ├── mod.rs
+│   ├── models.rs
+│   ├── handlers.rs
+│   └── service.rs
+├── account/
+│   ├── mod.rs
+│   ├── models.rs
+│   ├── handlers.rs
+│   └── service.rs
+├── category/
+│   ├── mod.rs
+│   ├── models.rs
+│   ├── handlers.rs
+│   └── service.rs
+└── transaction/
+    ├── mod.rs
+    ├── models.rs
+    ├── handlers.rs
+    └── service.rs
+```
 
 ---
 
@@ -196,30 +196,25 @@ cargo fmt
 
 ---
 
-## Architecture Overview
+## API Summary
 
-```
-src/
-├── main.rs          # Server setup, route registration
-├── lib.rs           # Module exports
-├── auth.rs          # Auth endpoints and utilities
-├── models.rs        # User, Token, RefreshToken models
-├── errors.rs        # AppError enum with HTTP mapping
-├── budgets/         # (TO CREATE)
-├── accounts/        # (TO CREATE)
-├── categories/      # (TO CREATE)
-└── transactions/    # (TO CREATE)
-```
+| Module | Endpoints | Status |
+|--------|-----------|--------|
+| Health | 1 | ✅ |
+| Auth | 5 | ✅ |
+| Budget | 8 | ✅ |
+| Account | 8 | ✅ |
+| Category | 6 | ✅ |
+| Transaction | 7 | ✅ |
+| **Total** | **35** | ✅ |
 
 ---
 
-## Resume Instructions
+## Environment Variables
 
-To continue implementation, tell Claude:
-
-> "Continue implementing the BudgetFlow backend from Phase 3 (Budget Management).
-> Reference IMPLEMENTATION_STATUS.md and the feature plans in features/ directory."
-
-Or for a specific phase:
-
-> "Implement Phase 4 (Account Management) for the BudgetFlow backend."
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `JWT_SECRET` | Secret key for JWT signing | Yes |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated origins | No (default: localhost:3000) |
+| `RUST_LOG` | Logging level | No (default: info) |

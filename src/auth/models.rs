@@ -37,7 +37,10 @@ pub struct CreateUserDto {
     #[validate(email)]
     pub email: String,
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
-    #[validate(custom(function = "validate_password_complexity", message = "Password must contain at least one uppercase letter, one lowercase letter, and one number"))]
+    #[validate(custom(
+        function = "validate_password_complexity",
+        message = "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+    ))]
     pub password: String,
     #[validate(length(max = 100, message = "Full name must be at most 100 characters"))]
     pub full_name: Option<String>,
