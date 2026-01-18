@@ -6,12 +6,10 @@ use validator::Validate;
 use crate::errors::AppError;
 
 use super::jwt::{
-    create_access_token, decode_token, extract_token, revoke_all_user_tokens,
-    revoke_refresh_token, rotate_refresh_token, validate_refresh_token,
+    create_access_token, decode_token, extract_token, revoke_all_user_tokens, revoke_refresh_token,
+    rotate_refresh_token, validate_refresh_token,
 };
-use super::models::{
-    AuthTokenResponse, CreateUserDto, LoginDto, RefreshTokenDto, UserResponseDto,
-};
+use super::models::{AuthTokenResponse, CreateUserDto, LoginDto, RefreshTokenDto, UserResponseDto};
 use super::service::AuthService;
 
 /// POST /auth/register - Register a new user
@@ -36,9 +34,13 @@ pub async fn login(
     jwt_secret: web::Data<Secret<String>>,
     body: web::Json<LoginDto>,
 ) -> Result<HttpResponse, AppError> {
-    let response =
-        AuthService::login(pool.get_ref(), jwt_secret.get_ref(), &body.email, &body.password)
-            .await?;
+    let response = AuthService::login(
+        pool.get_ref(),
+        jwt_secret.get_ref(),
+        &body.email,
+        &body.password,
+    )
+    .await?;
 
     Ok(HttpResponse::Ok().json(response))
 }
@@ -57,8 +59,7 @@ pub async fn refresh(
     let user = AuthService::get_user_by_id(pool.get_ref(), token_record.user_id).await?;
 
     // Rotate refresh token atomically (revoke old, create new)
-    let new_refresh_token =
-        rotate_refresh_token(pool.get_ref(), token_record.id, user.id).await?;
+    let new_refresh_token = rotate_refresh_token(pool.get_ref(), token_record.id, user.id).await?;
 
     // Create new access token
     let access_token = create_access_token(&user, jwt_secret.get_ref())?;
