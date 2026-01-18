@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, ResponseError};
 use serde::Serialize;
 use std::fmt;
 use tracing::error;
+use utoipa::ToSchema;
 
 #[derive(Debug)]
 pub enum AppError {
@@ -12,10 +13,15 @@ pub enum AppError {
     InternalError(String),
 }
 
-#[derive(Serialize)]
-struct ErrorResponse {
-    error: String,
-    message: String,
+/// Standard error response format
+#[derive(Serialize, ToSchema)]
+pub struct ErrorResponse {
+    /// Error type code (e.g., "VALIDATION_ERROR", "NOT_FOUND")
+    #[schema(example = "VALIDATION_ERROR")]
+    pub error: String,
+    /// Human-readable error message
+    #[schema(example = "Invalid input provided")]
+    pub message: String,
 }
 
 impl fmt::Display for AppError {

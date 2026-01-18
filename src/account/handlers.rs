@@ -2,7 +2,7 @@ use actix_web::{delete, get, patch, post, web, HttpResponse};
 use sqlx::PgPool;
 use validator::Validate;
 
-use crate::errors::AppError;
+use crate::errors::{AppError, ErrorResponse};
 use crate::extractors::AuthenticatedUser;
 
 use super::models::{
@@ -12,6 +12,16 @@ use super::models::{
 use super::service::AccountService;
 
 /// GET /accounts - List all accounts for the authenticated user
+#[utoipa::path(
+    get,
+    path = "/accounts",
+    tag = "Accounts",
+    responses(
+        (status = 200, description = "List of accounts", body = AccountsListResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/accounts")]
 pub async fn list_accounts(
     pool: web::Data<PgPool>,
@@ -31,6 +41,16 @@ pub async fn list_accounts(
 }
 
 /// GET /accounts/summary - Get all accounts with financial summary
+#[utoipa::path(
+    get,
+    path = "/accounts/summary",
+    tag = "Accounts",
+    responses(
+        (status = 200, description = "Accounts with financial summary", body = AccountsSummaryResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/accounts/summary")]
 pub async fn get_accounts_summary(
     pool: web::Data<PgPool>,
@@ -51,6 +71,17 @@ pub async fn get_accounts_summary(
 }
 
 /// GET /accounts/type/{type} - Get accounts by type
+#[utoipa::path(
+    get,
+    path = "/accounts/type/{type}",
+    tag = "Accounts",
+    params(AccountTypePath),
+    responses(
+        (status = 200, description = "Accounts of specified type", body = AccountsListResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/accounts/type/{type}")]
 pub async fn get_accounts_by_type(
     pool: web::Data<PgPool>,
@@ -73,6 +104,18 @@ pub async fn get_accounts_by_type(
 }
 
 /// GET /accounts/{id} - Get a specific account by ID
+#[utoipa::path(
+    get,
+    path = "/accounts/{id}",
+    tag = "Accounts",
+    params(AccountIdPath),
+    responses(
+        (status = 200, description = "Account details", body = AccountResponse),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/accounts/{id}")]
 pub async fn get_account(
     pool: web::Data<PgPool>,
@@ -85,6 +128,18 @@ pub async fn get_account(
 }
 
 /// POST /accounts - Create a new account
+#[utoipa::path(
+    post,
+    path = "/accounts",
+    tag = "Accounts",
+    request_body = CreateAccountDto,
+    responses(
+        (status = 201, description = "Account created", body = AccountResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[post("/accounts")]
 pub async fn create_account(
     pool: web::Data<PgPool>,
@@ -100,6 +155,20 @@ pub async fn create_account(
 }
 
 /// PATCH /accounts/{id} - Update an account (partial update)
+#[utoipa::path(
+    patch,
+    path = "/accounts/{id}",
+    tag = "Accounts",
+    params(AccountIdPath),
+    request_body = UpdateAccountDto,
+    responses(
+        (status = 200, description = "Account updated", body = AccountResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[patch("/accounts/{id}")]
 pub async fn update_account(
     pool: web::Data<PgPool>,
@@ -119,6 +188,19 @@ pub async fn update_account(
 }
 
 /// PATCH /accounts/{id}/balance - Update account balance only
+#[utoipa::path(
+    patch,
+    path = "/accounts/{id}/balance",
+    tag = "Accounts",
+    params(AccountIdPath),
+    request_body = UpdateBalanceDto,
+    responses(
+        (status = 200, description = "Balance updated", body = AccountResponse),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[patch("/accounts/{id}/balance")]
 pub async fn update_account_balance(
     pool: web::Data<PgPool>,
@@ -133,6 +215,18 @@ pub async fn update_account_balance(
 }
 
 /// DELETE /accounts/{id} - Delete an account
+#[utoipa::path(
+    delete,
+    path = "/accounts/{id}",
+    tag = "Accounts",
+    params(AccountIdPath),
+    responses(
+        (status = 200, description = "Account deleted", body = DeleteResponse),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[delete("/accounts/{id}")]
 pub async fn delete_account(
     pool: web::Data<PgPool>,

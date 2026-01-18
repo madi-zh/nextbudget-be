@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::ToSchema;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
@@ -32,25 +33,39 @@ fn validate_password_complexity(password: &str) -> Result<(), ValidationError> {
     }
 }
 
-#[derive(Debug, Deserialize, Validate)]
+/// Request body for user registration
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreateUserDto {
+    /// User's email address
     #[validate(email)]
+    #[schema(example = "user@example.com")]
     pub email: String,
+    /// Password (min 8 chars, must include uppercase, lowercase, and digit)
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     #[validate(custom(
         function = "validate_password_complexity",
         message = "Password must contain at least one uppercase letter, one lowercase letter, and one number"
     ))]
+    #[schema(example = "Password123")]
     pub password: String,
+    /// Optional full name
     #[validate(length(max = 100, message = "Full name must be at most 100 characters"))]
+    #[schema(example = "John Doe")]
     pub full_name: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+/// User information returned in responses
+#[derive(Debug, Serialize, ToSchema)]
 pub struct UserResponseDto {
+    /// Unique user identifier
     pub id: Uuid,
+    /// User's email address
+    #[schema(example = "user@example.com")]
     pub email: String,
+    /// User's full name
+    #[schema(example = "John Doe")]
     pub full_name: Option<String>,
+    /// Account creation timestamp
     pub created_at: DateTime<Utc>,
 }
 
@@ -65,9 +80,14 @@ impl UserResponseDto {
     }
 }
 
-#[derive(Debug, Deserialize)]
+/// Request body for user login
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct LoginDto {
+    /// User's email address
+    #[schema(example = "user@example.com")]
     pub email: String,
+    /// User's password
+    #[schema(example = "Password123")]
     pub password: String,
 }
 
@@ -96,19 +116,30 @@ pub struct RefreshToken {
     pub revoked_at: Option<DateTime<Utc>>,
 }
 
-/// Request to refresh tokens
-#[derive(Debug, Deserialize)]
+/// Request body to refresh access token
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RefreshTokenDto {
+    /// The refresh token obtained from login
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub refresh_token: String,
 }
 
 /// Response containing both access and refresh tokens
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AuthTokenResponse {
+    /// JWT access token (short-lived, 15 minutes)
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub access_token: String,
+    /// Refresh token for obtaining new access tokens
+    #[schema(example = "a1b2c3d4e5f6...")]
     pub refresh_token: String,
+    /// Token type (always "Bearer")
+    #[schema(example = "Bearer")]
     pub token_type: &'static str,
-    pub expires_in: u64, // Access token expiry in seconds
+    /// Access token expiry time in seconds
+    #[schema(example = 900)]
+    pub expires_in: u64,
+    /// User information
     pub user: UserResponseDto,
 }
 

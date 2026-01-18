@@ -2,7 +2,7 @@ use actix_web::{delete, get, patch, post, web, HttpResponse};
 use sqlx::PgPool;
 use validator::Validate;
 
-use crate::errors::AppError;
+use crate::errors::{AppError, ErrorResponse};
 use crate::extractors::AuthenticatedUser;
 
 use super::models::{
@@ -12,6 +12,17 @@ use super::models::{
 use super::service::BudgetService;
 
 /// GET /budgets - List all budgets for the authenticated user
+#[utoipa::path(
+    get,
+    path = "/budgets",
+    tag = "Budgets",
+    params(ListBudgetsQuery),
+    responses(
+        (status = 200, description = "List of budgets", body = Vec<BudgetResponse>),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/budgets")]
 pub async fn list_budgets(
     pool: web::Data<PgPool>,
@@ -33,6 +44,18 @@ pub async fn list_budgets(
 }
 
 /// GET /budgets/{id} - Get a specific budget by ID
+#[utoipa::path(
+    get,
+    path = "/budgets/{id}",
+    tag = "Budgets",
+    params(BudgetIdPath),
+    responses(
+        (status = 200, description = "Budget details", body = BudgetResponse),
+        (status = 404, description = "Budget not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/budgets/{id}")]
 pub async fn get_budget(
     pool: web::Data<PgPool>,
@@ -45,6 +68,18 @@ pub async fn get_budget(
 }
 
 /// GET /budgets/month/{month}/year/{year} - Get budget for specific month/year
+#[utoipa::path(
+    get,
+    path = "/budgets/month/{month}/year/{year}",
+    tag = "Budgets",
+    params(MonthYearPath),
+    responses(
+        (status = 200, description = "Budget details", body = BudgetResponse),
+        (status = 404, description = "Budget not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/budgets/month/{month}/year/{year}")]
 pub async fn get_budget_by_month_year(
     pool: web::Data<PgPool>,
@@ -66,6 +101,19 @@ pub async fn get_budget_by_month_year(
 }
 
 /// POST /budgets - Create a new budget
+#[utoipa::path(
+    post,
+    path = "/budgets",
+    tag = "Budgets",
+    request_body = CreateBudgetDto,
+    responses(
+        (status = 201, description = "Budget created", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 409, description = "Budget already exists for this month/year", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[post("/budgets")]
 pub async fn create_budget(
     pool: web::Data<PgPool>,
@@ -83,6 +131,20 @@ pub async fn create_budget(
 }
 
 /// PATCH /budgets/{id} - Update a budget (partial update)
+#[utoipa::path(
+    patch,
+    path = "/budgets/{id}",
+    tag = "Budgets",
+    params(BudgetIdPath),
+    request_body = UpdateBudgetDto,
+    responses(
+        (status = 200, description = "Budget updated", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Budget not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[patch("/budgets/{id}")]
 pub async fn update_budget(
     pool: web::Data<PgPool>,
@@ -101,6 +163,20 @@ pub async fn update_budget(
 }
 
 /// PATCH /budgets/{id}/income - Update income only
+#[utoipa::path(
+    patch,
+    path = "/budgets/{id}/income",
+    tag = "Budgets",
+    params(BudgetIdPath),
+    request_body = UpdateIncomeDto,
+    responses(
+        (status = 200, description = "Income updated", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Budget not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[patch("/budgets/{id}/income")]
 pub async fn update_income(
     pool: web::Data<PgPool>,
@@ -117,6 +193,20 @@ pub async fn update_income(
 }
 
 /// PATCH /budgets/{id}/savings-rate - Update savings rate only
+#[utoipa::path(
+    patch,
+    path = "/budgets/{id}/savings-rate",
+    tag = "Budgets",
+    params(BudgetIdPath),
+    request_body = UpdateSavingsRateDto,
+    responses(
+        (status = 200, description = "Savings rate updated", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Budget not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[patch("/budgets/{id}/savings-rate")]
 pub async fn update_savings_rate(
     pool: web::Data<PgPool>,
@@ -134,6 +224,18 @@ pub async fn update_savings_rate(
 }
 
 /// DELETE /budgets/{id} - Delete a budget
+#[utoipa::path(
+    delete,
+    path = "/budgets/{id}",
+    tag = "Budgets",
+    params(BudgetIdPath),
+    responses(
+        (status = 204, description = "Budget deleted"),
+        (status = 404, description = "Budget not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[delete("/budgets/{id}")]
 pub async fn delete_budget(
     pool: web::Data<PgPool>,

@@ -4,11 +4,14 @@ mod budget;
 mod category;
 mod errors;
 mod extractors;
+mod openapi;
 mod transaction;
 
 use actix_cors::Cors;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{get, http::header, web, App, HttpResponse, HttpServer, Responder};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 use dotenvy::dotenv;
 use secrecy::Secret;
 use sqlx::postgres::PgPoolOptions;
@@ -99,6 +102,11 @@ async fn main() -> std::io::Result<()> {
             // Shared state
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(jwt_secret.clone()))
+            // Swagger UI
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),
+            )
             // Health endpoint (no rate limiting)
             .service(health_check)
             // Auth endpoints with rate limiting

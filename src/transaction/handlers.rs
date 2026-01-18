@@ -2,16 +2,27 @@ use actix_web::{delete, get, patch, post, web, HttpResponse};
 use sqlx::PgPool;
 use validator::Validate;
 
-use crate::errors::AppError;
+use crate::errors::{AppError, ErrorResponse};
 use crate::extractors::AuthenticatedUser;
 
 use super::models::{
-    CategoriesQueryDto, CategoryIdPath, CreateTransactionDto, PaginatedResponse,
+    CategoriesQueryDto, CategoryIdPath, CreateTransactionDto, PaginatedTransactionResponse,
     TransactionFilters, TransactionIdPath, TransactionResponse, UpdateTransactionDto,
 };
 use super::service::TransactionService;
 
 /// GET /transactions - List transactions with optional filters
+#[utoipa::path(
+    get,
+    path = "/transactions",
+    tag = "Transactions",
+    params(TransactionFilters),
+    responses(
+        (status = 200, description = "Paginated list of transactions", body = PaginatedTransactionResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/transactions")]
 pub async fn list_transactions(
     pool: web::Data<PgPool>,
@@ -27,7 +38,7 @@ pub async fn list_transactions(
 
     let response: Vec<TransactionResponse> = transactions.into_iter().map(Into::into).collect();
 
-    Ok(HttpResponse::Ok().json(PaginatedResponse {
+    Ok(HttpResponse::Ok().json(PaginatedTransactionResponse {
         data: response,
         total,
         limit: query.limit,
@@ -36,6 +47,18 @@ pub async fn list_transactions(
 }
 
 /// GET /transactions/category/{category_id} - Get all transactions for a category
+#[utoipa::path(
+    get,
+    path = "/transactions/category/{category_id}",
+    tag = "Transactions",
+    params(CategoryIdPath),
+    responses(
+        (status = 200, description = "List of transactions for category", body = Vec<TransactionResponse>),
+        (status = 404, description = "Category not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/transactions/category/{category_id}")]
 pub async fn get_by_category(
     pool: web::Data<PgPool>,
@@ -51,6 +74,17 @@ pub async fn get_by_category(
 }
 
 /// POST /transactions/categories - Get transactions for multiple categories
+#[utoipa::path(
+    post,
+    path = "/transactions/categories",
+    tag = "Transactions",
+    request_body = CategoriesQueryDto,
+    responses(
+        (status = 200, description = "Transactions for specified categories", body = Vec<TransactionResponse>),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[post("/transactions/categories")]
 pub async fn get_by_categories(
     pool: web::Data<PgPool>,
@@ -70,6 +104,18 @@ pub async fn get_by_categories(
 }
 
 /// GET /transactions/{id} - Get a specific transaction by ID
+#[utoipa::path(
+    get,
+    path = "/transactions/{id}",
+    tag = "Transactions",
+    params(TransactionIdPath),
+    responses(
+        (status = 200, description = "Transaction details", body = TransactionResponse),
+        (status = 404, description = "Transaction not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/transactions/{id}")]
 pub async fn get_transaction(
     pool: web::Data<PgPool>,
@@ -83,6 +129,19 @@ pub async fn get_transaction(
 }
 
 /// POST /transactions - Create a new transaction (atomically updates account balance)
+#[utoipa::path(
+    post,
+    path = "/transactions",
+    tag = "Transactions",
+    request_body = CreateTransactionDto,
+    responses(
+        (status = 201, description = "Transaction created", body = TransactionResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Category or account not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[post("/transactions")]
 pub async fn create_transaction(
     pool: web::Data<PgPool>,
@@ -100,6 +159,20 @@ pub async fn create_transaction(
 }
 
 /// PATCH /transactions/{id} - Update a transaction (handles balance adjustments atomically)
+#[utoipa::path(
+    patch,
+    path = "/transactions/{id}",
+    tag = "Transactions",
+    params(TransactionIdPath),
+    request_body = UpdateTransactionDto,
+    responses(
+        (status = 200, description = "Transaction updated", body = TransactionResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Transaction not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[patch("/transactions/{id}")]
 pub async fn update_transaction(
     pool: web::Data<PgPool>,
@@ -124,6 +197,18 @@ pub async fn update_transaction(
 }
 
 /// DELETE /transactions/{id} - Delete a transaction (atomically restores account balance)
+#[utoipa::path(
+    delete,
+    path = "/transactions/{id}",
+    tag = "Transactions",
+    params(TransactionIdPath),
+    responses(
+        (status = 204, description = "Transaction deleted"),
+        (status = 404, description = "Transaction not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
 #[delete("/transactions/{id}")]
 pub async fn delete_transaction(
     pool: web::Data<PgPool>,

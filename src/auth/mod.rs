@@ -1,6 +1,6 @@
-mod handlers;
+pub mod handlers;
 mod jwt;
-mod models;
+pub mod models;
 mod password;
 mod service;
 

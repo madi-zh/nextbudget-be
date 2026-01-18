@@ -3,7 +3,7 @@ use secrecy::Secret;
 use sqlx::PgPool;
 use validator::Validate;
 
-use crate::errors::AppError;
+use crate::errors::{AppError, ErrorResponse};
 
 use super::jwt::{
     create_access_token, decode_token, extract_token, revoke_all_user_tokens, revoke_refresh_token,
@@ -13,6 +13,17 @@ use super::models::{AuthTokenResponse, CreateUserDto, LoginDto, RefreshTokenDto,
 use super::service::AuthService;
 
 /// POST /auth/register - Register a new user
+#[utoipa::path(
+    post,
+    path = "/auth/register",
+    tag = "Auth",
+    request_body = CreateUserDto,
+    responses(
+        (status = 201, description = "User registered successfully", body = AuthTokenResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 409, description = "Email already exists", body = ErrorResponse)
+    )
+)]
 #[post("/auth/register")]
 pub async fn register(
     pool: web::Data<PgPool>,
@@ -28,6 +39,16 @@ pub async fn register(
 }
 
 /// POST /auth/login - Authenticate and get tokens
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    tag = "Auth",
+    request_body = LoginDto,
+    responses(
+        (status = 200, description = "Login successful", body = AuthTokenResponse),
+        (status = 401, description = "Invalid credentials", body = ErrorResponse)
+    )
+)]
 #[post("/auth/login")]
 pub async fn login(
     pool: web::Data<PgPool>,
@@ -46,6 +67,16 @@ pub async fn login(
 }
 
 /// POST /auth/refresh - Refresh access token using refresh token
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    tag = "Auth",
+    request_body = RefreshTokenDto,
+    responses(
+        (status = 200, description = "Token refreshed successfully", body = AuthTokenResponse),
+        (status = 401, description = "Invalid or expired refresh token", body = ErrorResponse)
+    )
+)]
 #[post("/auth/refresh")]
 pub async fn refresh(
     pool: web::Data<PgPool>,
@@ -72,6 +103,19 @@ pub async fn refresh(
 }
 
 /// POST /auth/logout - Revoke refresh tokens
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    tag = "Auth",
+    request_body(content = Option<RefreshTokenDto>, description = "Optional refresh token to revoke. If not provided, all sessions are revoked."),
+    responses(
+        (status = 200, description = "Logged out successfully"),
+        (status = 401, description = "Invalid access token", body = ErrorResponse)
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 #[post("/auth/logout")]
 pub async fn logout(
     req: HttpRequest,
@@ -108,6 +152,18 @@ pub async fn logout(
 }
 
 /// GET /auth/me - Get current user info
+#[utoipa::path(
+    get,
+    path = "/auth/me",
+    tag = "Auth",
+    responses(
+        (status = 200, description = "Current user info", body = UserResponseDto),
+        (status = 401, description = "Invalid access token", body = ErrorResponse)
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 #[get("/auth/me")]
 pub async fn me(
     req: HttpRequest,
