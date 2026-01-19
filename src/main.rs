@@ -120,11 +120,11 @@ async fn main() -> std::io::Result<()> {
             // Auth endpoints without rate limiting
             .service(auth::logout)
             .service(auth::me)
-            // Budget endpoints
+            // Budget endpoints (order matters: specific routes before generic {id} routes)
             .service(budget::list_budgets)
+            .service(budget::create_budget)
             .service(budget::get_budget_by_month_year)
             .service(budget::get_budget)
-            .service(budget::create_budget)
             .service(budget::update_income)
             .service(budget::update_savings_rate)
             .service(budget::update_budget)
