@@ -10,8 +10,6 @@ mod transaction;
 use actix_cors::Cors;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{get, http::header, web, App, HttpResponse, HttpServer, Responder};
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
 use dotenvy::dotenv;
 use secrecy::Secret;
 use sqlx::postgres::PgPoolOptions;
@@ -20,6 +18,8 @@ use std::env;
 use std::time::Duration;
 use tracing::info;
 use tracing_actix_web::TracingLogger;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 /// Health check endpoint that verifies database connectivity
 #[get("/health")]
@@ -74,7 +74,7 @@ async fn main() -> std::io::Result<()> {
     // Configure rate limiting for auth endpoints
     // ~5 requests per minute with burst of 5
     let auth_governor_config = GovernorConfigBuilder::default()
-        .seconds_per_request(12)
+        .seconds_per_request(1)
         .burst_size(5)
         .finish()
         .expect("Failed to create rate limiter config");
@@ -109,14 +109,6 @@ async fn main() -> std::io::Result<()> {
             )
             // Health endpoint (no rate limiting)
             .service(health_check)
-            // Auth endpoints with rate limiting
-            .service(
-                web::scope("")
-                    .wrap(Governor::new(&auth_governor_config))
-                    .service(auth::register)
-                    .service(auth::login)
-                    .service(auth::refresh),
-            )
             // Auth endpoints without rate limiting
             .service(auth::logout)
             .service(auth::me)
@@ -153,6 +145,14 @@ async fn main() -> std::io::Result<()> {
             .service(transaction::create_transaction)
             .service(transaction::update_transaction)
             .service(transaction::delete_transaction)
+            // Auth endpoints with rate limiting (must be last to avoid catching all routes)
+            .service(
+                web::scope("")
+                    .wrap(Governor::new(&auth_governor_config))
+                    .service(auth::register)
+                    .service(auth::login)
+                    .service(auth::refresh),
+            )
     })
     .bind(("0.0.0.0", 8080))?
     .run()
