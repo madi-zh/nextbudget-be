@@ -6,7 +6,7 @@ use crate::account::models::{
     CreateAccountDto, DeleteResponse, UpdateAccountDto, UpdateBalanceDto,
 };
 use crate::auth::models::{
-    AuthTokenResponse, CreateUserDto, LoginDto, RefreshTokenDto, UserResponseDto,
+    AuthTokenResponse, CreateUserDto, GoogleLoginDto, LoginDto, RefreshTokenDto, UserResponseDto,
 };
 use crate::budget::models::{
     BudgetResponse, CreateBudgetDto, UpdateBudgetDto, UpdateIncomeDto, UpdateSavingsRateDto,
@@ -68,6 +68,7 @@ impl Modify for SecurityAddon {
         // Auth endpoints
         crate::auth::handlers::register,
         crate::auth::handlers::login,
+        crate::auth::handlers::google_login,
         crate::auth::handlers::refresh,
         crate::auth::handlers::logout,
         crate::auth::handlers::me,
@@ -112,6 +113,7 @@ impl Modify for SecurityAddon {
             // Auth schemas
             CreateUserDto,
             LoginDto,
+            GoogleLoginDto,
             RefreshTokenDto,
             UserResponseDto,
             AuthTokenResponse,

@@ -151,6 +151,7 @@ async fn main() -> std::io::Result<()> {
                     .wrap(Governor::new(&auth_governor_config))
                     .service(auth::register)
                     .service(auth::login)
+                    .service(auth::google_login)
                     .service(auth::refresh),
             )
     })

@@ -37,6 +37,8 @@ regex = "1.10"
 actix-cors = "0.7"
 actix-governor = "0.8"
 secrecy = { version = "0.8", features = ["serde"] }
+# HTTP client for Google OAuth verification
+reqwest = { version = "0.12", features = ["json"] }
 # Logging
 tracing = "0.1"
 tracing-actix-web = "0.7"
