@@ -58,13 +58,13 @@ async fn main() -> std::io::Result<()> {
     let allowed_origins =
         env::var("CORS_ALLOWED_ORIGINS").unwrap_or_else(|_| "http://localhost:3000".to_string());
 
-    // Configure connection pool with production-ready settings
+    // Configure connection pool for Cloud Run (handles concurrent requests)
     let pool = PgPoolOptions::new()
-        .max_connections(20)
-        .min_connections(5)
-        .acquire_timeout(Duration::from_secs(3))
-        .idle_timeout(Duration::from_secs(600))
-        .max_lifetime(Duration::from_secs(1800))
+        .max_connections(10)
+        .min_connections(0)
+        .acquire_timeout(Duration::from_secs(5))
+        .idle_timeout(Duration::from_secs(300))
+        .max_lifetime(Duration::from_secs(900))
         .connect(&database_url)
         .await
         .expect("Failed to create pool");

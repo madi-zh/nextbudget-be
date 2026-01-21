@@ -1,0 +1,9 @@
+target/
+.git/
+.env
+.env.*
+!.env.example
+*.md
+.vscode/
+.idea/
+Dockerfile.dev
