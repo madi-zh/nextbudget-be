@@ -91,6 +91,29 @@ pub struct LoginDto {
     pub password: String,
 }
 
+/// Request body for Google OAuth login
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GoogleLoginDto {
+    /// Google ID token from Google Sign-In
+    #[schema(example = "eyJhbGciOiJSUzI1NiIsInR5cCI6...")]
+    pub id_token: String,
+}
+
+/// Google token verification response structure
+#[derive(Debug, Deserialize)]
+pub struct GoogleTokenInfo {
+    /// Google user ID (subject)
+    pub sub: String,
+    /// User's email address
+    pub email: String,
+    /// Whether the email has been verified
+    pub email_verified: String,
+    /// User's full name
+    pub name: Option<String>,
+    /// URL to user's profile picture
+    pub picture: Option<String>,
+}
+
 // ============================================================================
 // Token Models
 // ============================================================================
