@@ -42,7 +42,7 @@ impl AuthService {
             r#"
             INSERT INTO users (email, password_hash, full_name)
             VALUES ($1, $2, $3)
-            RETURNING id, email, password_hash, full_name, created_at, updated_at
+            RETURNING id, email, password_hash, full_name, default_currency, created_at, updated_at
             "#,
         )
         .bind(&dto.email)
@@ -68,7 +68,7 @@ impl AuthService {
     ) -> Result<AuthTokenResponse, AppError> {
         // Find user by email
         let user = sqlx::query_as::<_, User>(
-            "SELECT id, email, password_hash, full_name, created_at, updated_at FROM users WHERE email = $1",
+            "SELECT id, email, password_hash, full_name, default_currency, created_at, updated_at FROM users WHERE email = $1",
         )
         .bind(email)
         .fetch_optional(pool)
@@ -94,7 +94,7 @@ impl AuthService {
     /// Get user by ID
     pub async fn get_user_by_id(pool: &PgPool, user_id: Uuid) -> Result<User, AppError> {
         sqlx::query_as::<_, User>(
-            "SELECT id, email, password_hash, full_name, created_at, updated_at FROM users WHERE id = $1",
+            "SELECT id, email, password_hash, full_name, default_currency, created_at, updated_at FROM users WHERE id = $1",
         )
         .bind(user_id)
         .fetch_optional(pool)
@@ -159,7 +159,7 @@ impl AuthService {
     ) -> Result<User, AppError> {
         // Try to find existing user by email
         let existing_user = sqlx::query_as::<_, User>(
-            "SELECT id, email, password_hash, full_name, created_at, updated_at FROM users WHERE email = $1",
+            "SELECT id, email, password_hash, full_name, default_currency, created_at, updated_at FROM users WHERE email = $1",
         )
         .bind(&google_user.email)
         .fetch_optional(pool)
@@ -182,7 +182,7 @@ impl AuthService {
             r#"
             INSERT INTO users (email, password_hash, full_name)
             VALUES ($1, $2, $3)
-            RETURNING id, email, password_hash, full_name, created_at, updated_at
+            RETURNING id, email, password_hash, full_name, default_currency, created_at, updated_at
             "#,
         )
         .bind(&google_user.email)
