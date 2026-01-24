@@ -3,8 +3,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::models::{
-    Account, AccountsSummary, CreateAccountDto, SummaryRow, UpdateAccountDto, UpdateBalanceDto,
+    Account, AccountsSummary, CreateAccountDto, CurrencySummary, CurrencySummaryRow, SummaryRow,
+    UpdateAccountDto, UpdateBalanceDto,
 };
+use crate::currency::service::CurrencyService;
 use crate::errors::AppError;
 
 /// Service layer for account business logic.
@@ -15,7 +17,7 @@ impl AccountService {
     pub async fn list_accounts(pool: &PgPool, owner_id: Uuid) -> Result<Vec<Account>, AppError> {
         sqlx::query_as::<_, Account>(
             r#"
-            SELECT id, owner_id, name, account_type, balance, color_hex, created_at, updated_at
+            SELECT id, owner_id, name, account_type, balance, color_hex, currency, created_at, updated_at
             FROM accounts
             WHERE owner_id = $1
             ORDER BY created_at DESC
@@ -35,7 +37,7 @@ impl AccountService {
     ) -> Result<Account, AppError> {
         sqlx::query_as::<_, Account>(
             r#"
-            SELECT id, owner_id, name, account_type, balance, color_hex, created_at, updated_at
+            SELECT id, owner_id, name, account_type, balance, color_hex, currency, created_at, updated_at
             FROM accounts
             WHERE id = $1 AND owner_id = $2
             "#,
@@ -66,7 +68,7 @@ impl AccountService {
 
         sqlx::query_as::<_, Account>(
             r#"
-            SELECT id, owner_id, name, account_type, balance, color_hex, created_at, updated_at
+            SELECT id, owner_id, name, account_type, balance, color_hex, currency, created_at, updated_at
             FROM accounts
             WHERE owner_id = $1 AND account_type = $2
             ORDER BY created_at DESC
@@ -83,11 +85,11 @@ impl AccountService {
     pub async fn get_accounts_summary(
         pool: &PgPool,
         owner_id: Uuid,
-    ) -> Result<(Vec<Account>, AccountsSummary), AppError> {
+    ) -> Result<(Vec<Account>, AccountsSummary, Vec<CurrencySummary>), AppError> {
         // Fetch all accounts
         let accounts = Self::list_accounts(pool, owner_id).await?;
 
-        // Compute summary with a single aggregation query
+        // Compute overall summary with a single aggregation query
         let summary_row = sqlx::query_as::<_, SummaryRow>(
             r#"
             SELECT
@@ -114,7 +116,41 @@ impl AccountService {
             accounts_count: summary_row.accounts_count.unwrap_or(0),
         };
 
-        Ok((accounts, summary))
+        // Compute per-currency summaries
+        let currency_rows = sqlx::query_as::<_, CurrencySummaryRow>(
+            r#"
+            SELECT
+                currency,
+                COALESCE(SUM(CASE WHEN account_type = 'savings' THEN balance ELSE 0 END), 0) as total_savings,
+                COALESCE(SUM(CASE WHEN account_type IN ('checking', 'credit') THEN balance ELSE 0 END), 0) as total_spending,
+                COUNT(*) as accounts_count
+            FROM accounts
+            WHERE owner_id = $1
+            GROUP BY currency
+            ORDER BY currency ASC
+            "#,
+        )
+        .bind(owner_id)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        let summaries: Vec<CurrencySummary> = currency_rows
+            .into_iter()
+            .map(|row| {
+                let savings = row.total_savings.unwrap_or(Decimal::ZERO);
+                let spending = row.total_spending.unwrap_or(Decimal::ZERO);
+                CurrencySummary {
+                    currency: row.currency,
+                    total_savings: savings,
+                    total_spending: spending,
+                    net_worth: savings + spending,
+                    accounts_count: row.accounts_count.unwrap_or(0),
+                }
+            })
+            .collect();
+
+        Ok((accounts, summary, summaries))
     }
 
     /// Create a new account.
@@ -133,11 +169,37 @@ impl AccountService {
         let balance = dto.balance.unwrap_or(Decimal::ZERO);
         let account_type = dto.account_type.as_str();
 
+        // Determine currency: use provided currency or fall back to user's default_currency
+        let currency = match &dto.currency {
+            Some(code) => {
+                // Validate that the currency exists and is active
+                let is_valid = CurrencyService::validate_currency(pool, code).await?;
+                if !is_valid {
+                    return Err(AppError::ValidationError(format!(
+                        "Currency '{}' is not valid or not active",
+                        code
+                    )));
+                }
+                code.to_uppercase()
+            }
+            None => {
+                // Fetch user's default_currency from the users table
+                let default_currency: String = sqlx::query_scalar(
+                    "SELECT default_currency FROM users WHERE id = $1",
+                )
+                .bind(owner_id)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+                default_currency
+            }
+        };
+
         sqlx::query_as::<_, Account>(
             r#"
-            INSERT INTO accounts (owner_id, name, account_type, balance, color_hex)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, owner_id, name, account_type, balance, color_hex, created_at, updated_at
+            INSERT INTO accounts (owner_id, name, account_type, balance, color_hex, currency)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, owner_id, name, account_type, balance, color_hex, currency, created_at, updated_at
             "#,
         )
         .bind(owner_id)
@@ -145,6 +207,7 @@ impl AccountService {
         .bind(account_type)
         .bind(balance)
         .bind(&dto.color_hex)
+        .bind(&currency)
         .fetch_one(pool)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))
@@ -190,7 +253,7 @@ impl AccountService {
                 color_hex = $5,
                 updated_at = NOW()
             WHERE id = $1 AND owner_id = $2
-            RETURNING id, owner_id, name, account_type, balance, color_hex, created_at, updated_at
+            RETURNING id, owner_id, name, account_type, balance, color_hex, currency, created_at, updated_at
             "#,
         )
         .bind(account_id)
@@ -215,7 +278,7 @@ impl AccountService {
             UPDATE accounts
             SET balance = $3, updated_at = NOW()
             WHERE id = $1 AND owner_id = $2
-            RETURNING id, owner_id, name, account_type, balance, color_hex, created_at, updated_at
+            RETURNING id, owner_id, name, account_type, balance, color_hex, currency, created_at, updated_at
             "#,
         )
         .bind(account_id)

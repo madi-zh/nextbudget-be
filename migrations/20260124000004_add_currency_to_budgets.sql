@@ -1,0 +1,1 @@
+ALTER TABLE budgets ADD COLUMN currency CHAR(3) NOT NULL DEFAULT 'USD' REFERENCES currencies(code);

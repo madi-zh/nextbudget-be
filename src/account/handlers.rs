@@ -56,7 +56,7 @@ pub async fn get_accounts_summary(
     pool: web::Data<PgPool>,
     auth: AuthenticatedUser,
 ) -> Result<HttpResponse, AppError> {
-    let (accounts, summary) =
+    let (accounts, summary, summaries) =
         AccountService::get_accounts_summary(pool.get_ref(), auth.user_id).await?;
 
     let response = AccountsSummaryResponse {
@@ -65,6 +65,7 @@ pub async fn get_accounts_summary(
             .map(AccountResponse::from_account)
             .collect(),
         summary,
+        summaries,
     };
 
     Ok(HttpResponse::Ok().json(response))

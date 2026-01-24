@@ -2,6 +2,7 @@ mod account;
 mod auth;
 mod budget;
 mod category;
+mod currency;
 mod errors;
 mod extractors;
 mod openapi;
@@ -145,6 +146,9 @@ async fn main() -> std::io::Result<()> {
             .service(transaction::create_transaction)
             .service(transaction::update_transaction)
             .service(transaction::delete_transaction)
+            // Currency endpoints (order matters: specific routes before generic routes)
+            .service(currency::list_currencies)
+            .service(currency::sync_exchange_rates)
             // Auth endpoints with rate limiting (must be last to avoid catching all routes)
             .service(
                 web::scope("")

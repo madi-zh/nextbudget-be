@@ -33,6 +33,7 @@ pub struct Budget {
     pub year: i16,
     pub total_income: Decimal,
     pub savings_rate: Decimal,
+    pub currency: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -61,6 +62,9 @@ pub struct BudgetResponse {
     /// Computed: income - savings_target
     #[schema(example = 4000.00)]
     pub spending_budget: Decimal,
+    /// ISO 4217 currency code
+    #[schema(example = "USD")]
+    pub currency: String,
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
     /// Last update timestamp
@@ -81,6 +85,7 @@ impl BudgetResponse {
             savings_rate: budget.savings_rate,
             savings_target,
             spending_budget,
+            currency: budget.currency,
             created_at: budget.created_at,
             updated_at: budget.updated_at,
         }
@@ -110,6 +115,10 @@ pub struct CreateBudgetDto {
     #[serde(default)]
     #[schema(example = 20.0)]
     pub savings_rate: Option<Decimal>,
+
+    /// Currency code (optional, defaults to user's default_currency)
+    #[schema(example = "USD")]
+    pub currency: Option<String>,
 }
 
 impl CreateBudgetDto {

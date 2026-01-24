@@ -6,6 +6,7 @@ use super::models::{
     Budget, CreateBudgetDto, ListBudgetsQuery, UpdateBudgetDto, UpdateIncomeDto,
     UpdateSavingsRateDto,
 };
+use crate::currency::service::CurrencyService;
 use crate::errors::AppError;
 
 /// Service layer for budget business logic.
@@ -21,7 +22,7 @@ impl BudgetService {
         let budgets = if let Some(year) = query.year {
             sqlx::query_as::<_, Budget>(
                 r#"
-                SELECT id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+                SELECT id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
                 FROM budgets
                 WHERE owner_id = $1 AND year = $2
                 ORDER BY year DESC, month DESC
@@ -37,7 +38,7 @@ impl BudgetService {
         } else {
             sqlx::query_as::<_, Budget>(
                 r#"
-                SELECT id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+                SELECT id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
                 FROM budgets
                 WHERE owner_id = $1
                 ORDER BY year DESC, month DESC
@@ -62,7 +63,7 @@ impl BudgetService {
     ) -> Result<Budget, AppError> {
         sqlx::query_as::<_, Budget>(
             r#"
-            SELECT id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+            SELECT id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
             FROM budgets
             WHERE id = $1 AND owner_id = $2
             "#,
@@ -84,7 +85,7 @@ impl BudgetService {
     ) -> Result<Budget, AppError> {
         sqlx::query_as::<_, Budget>(
             r#"
-            SELECT id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+            SELECT id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
             FROM budgets
             WHERE owner_id = $1 AND month = $2 AND year = $3
             "#,
@@ -126,11 +127,37 @@ impl BudgetService {
         let total_income = dto.total_income.unwrap_or(Decimal::ZERO);
         let savings_rate = dto.savings_rate.unwrap_or(Decimal::ZERO);
 
+        // Determine currency: use provided currency or fall back to user's default_currency
+        let currency = match &dto.currency {
+            Some(code) => {
+                // Validate that the currency exists and is active
+                let is_valid = CurrencyService::validate_currency(pool, code).await?;
+                if !is_valid {
+                    return Err(AppError::ValidationError(format!(
+                        "Currency '{}' is not valid or not active",
+                        code
+                    )));
+                }
+                code.to_uppercase()
+            }
+            None => {
+                // Fetch user's default_currency from the users table
+                let default_currency: String = sqlx::query_scalar(
+                    "SELECT default_currency FROM users WHERE id = $1",
+                )
+                .bind(owner_id)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| AppError::InternalError(e.to_string()))?;
+                default_currency
+            }
+        };
+
         sqlx::query_as::<_, Budget>(
             r#"
-            INSERT INTO budgets (owner_id, month, year, total_income, savings_rate)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+            INSERT INTO budgets (owner_id, month, year, total_income, savings_rate, currency)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
             "#,
         )
         .bind(owner_id)
@@ -138,6 +165,7 @@ impl BudgetService {
         .bind(dto.year)
         .bind(total_income)
         .bind(savings_rate)
+        .bind(&currency)
         .fetch_one(pool)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))
@@ -186,7 +214,7 @@ impl BudgetService {
             UPDATE budgets
             SET month = $1, year = $2, total_income = $3, savings_rate = $4, updated_at = NOW()
             WHERE id = $5 AND owner_id = $6
-            RETURNING id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+            RETURNING id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
             "#,
         )
         .bind(new_month)
@@ -212,7 +240,7 @@ impl BudgetService {
             UPDATE budgets
             SET total_income = $1, updated_at = NOW()
             WHERE id = $2 AND owner_id = $3
-            RETURNING id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+            RETURNING id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
             "#,
         )
         .bind(dto.total_income)
@@ -236,7 +264,7 @@ impl BudgetService {
             UPDATE budgets
             SET savings_rate = $1, updated_at = NOW()
             WHERE id = $2 AND owner_id = $3
-            RETURNING id, owner_id, month, year, total_income, savings_rate, created_at, updated_at
+            RETURNING id, owner_id, month, year, total_income, savings_rate, currency, created_at, updated_at
             "#,
         )
         .bind(dto.savings_rate)

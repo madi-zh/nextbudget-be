@@ -16,6 +16,7 @@ pub struct User {
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub full_name: Option<String>,
+    pub default_currency: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -65,6 +66,9 @@ pub struct UserResponseDto {
     /// User's full name
     #[schema(example = "John Doe")]
     pub full_name: Option<String>,
+    /// User's default currency code
+    #[schema(example = "USD")]
+    pub default_currency: String,
     /// Account creation timestamp
     pub created_at: DateTime<Utc>,
 }
@@ -75,6 +79,7 @@ impl UserResponseDto {
             id: user.id,
             email: user.email.clone(),
             full_name: user.full_name.clone(),
+            default_currency: user.default_currency.clone(),
             created_at: user.created_at,
         }
     }

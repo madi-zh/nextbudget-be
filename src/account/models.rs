@@ -63,6 +63,7 @@ pub struct Account {
     pub account_type: String,
     pub balance: Decimal,
     pub color_hex: String,
+    pub currency: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -86,6 +87,9 @@ pub struct AccountResponse {
     /// Display color in hex format
     #[schema(example = "#4CAF50")]
     pub color_hex: String,
+    /// ISO 4217 currency code
+    #[schema(example = "USD")]
+    pub currency: String,
     /// Creation timestamp
     pub created_at: DateTime<Utc>,
     /// Last update timestamp
@@ -100,6 +104,7 @@ impl AccountResponse {
             account_type: account.account_type,
             balance: account.balance,
             color_hex: account.color_hex,
+            currency: account.currency,
             created_at: account.created_at,
             updated_at: account.updated_at,
         }
@@ -135,6 +140,23 @@ pub struct AccountsSummary {
     pub accounts_count: i64,
 }
 
+/// Per-currency summary statistics
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrencySummary {
+    /// Currency code
+    #[schema(example = "USD")]
+    pub currency: String,
+    /// Total in savings accounts
+    pub total_savings: Decimal,
+    /// Total in checking/credit accounts
+    pub total_spending: Decimal,
+    /// Net worth in this currency
+    pub net_worth: Decimal,
+    /// Number of accounts
+    pub accounts_count: i64,
+}
+
 /// Response for accounts with summary
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -143,11 +165,22 @@ pub struct AccountsSummaryResponse {
     pub accounts: Vec<AccountResponse>,
     /// Financial summary
     pub summary: AccountsSummary,
+    /// Per-currency summaries
+    pub summaries: Vec<CurrencySummary>,
 }
 
 /// Summary row from database query
 #[derive(Debug, FromRow)]
 pub struct SummaryRow {
+    pub total_savings: Option<Decimal>,
+    pub total_spending: Option<Decimal>,
+    pub accounts_count: Option<i64>,
+}
+
+/// Currency summary row from database query
+#[derive(Debug, FromRow)]
+pub struct CurrencySummaryRow {
+    pub currency: String,
     pub total_savings: Option<Decimal>,
     pub total_spending: Option<Decimal>,
     pub accounts_count: Option<i64>,
@@ -189,6 +222,10 @@ pub struct CreateAccountDto {
     ))]
     #[schema(example = "#4CAF50")]
     pub color_hex: String,
+
+    /// Currency code (optional, defaults to user's default_currency)
+    #[schema(example = "USD")]
+    pub currency: Option<String>,
 }
 
 /// Request body for updating an account (PATCH - all fields optional)

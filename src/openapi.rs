@@ -3,7 +3,7 @@ use utoipa::{Modify, OpenApi};
 
 use crate::account::models::{
     AccountResponse, AccountType, AccountsListResponse, AccountsSummary, AccountsSummaryResponse,
-    CreateAccountDto, DeleteResponse, UpdateAccountDto, UpdateBalanceDto,
+    CreateAccountDto, CurrencySummary, DeleteResponse, UpdateAccountDto, UpdateBalanceDto,
 };
 use crate::auth::models::{
     AuthTokenResponse, CreateUserDto, GoogleLoginDto, LoginDto, RefreshTokenDto, UserResponseDto,
@@ -12,6 +12,7 @@ use crate::budget::models::{
     BudgetResponse, CreateBudgetDto, UpdateBudgetDto, UpdateIncomeDto, UpdateSavingsRateDto,
 };
 use crate::category::models::{CategoryResponse, CreateCategoryDto, UpdateCategoryDto};
+use crate::currency::models::{CurrenciesListResponse, CurrencyResponse, SyncRatesResponse};
 use crate::errors::ErrorResponse;
 use crate::transaction::models::{
     CategoriesQueryDto, CreateTransactionDto, PaginatedTransactionResponse, TransactionResponse,
@@ -62,7 +63,8 @@ impl Modify for SecurityAddon {
         (name = "Budgets", description = "Monthly budget management"),
         (name = "Accounts", description = "Financial account management"),
         (name = "Categories", description = "Budget category management"),
-        (name = "Transactions", description = "Transaction management with atomic balance updates")
+        (name = "Transactions", description = "Transaction management with atomic balance updates"),
+        (name = "Currencies", description = "Currency and exchange rate management")
     ),
     paths(
         // Auth endpoints
@@ -105,6 +107,9 @@ impl Modify for SecurityAddon {
         crate::transaction::handlers::create_transaction,
         crate::transaction::handlers::update_transaction,
         crate::transaction::handlers::delete_transaction,
+        // Currency endpoints
+        crate::currency::handlers::list_currencies,
+        crate::currency::handlers::sync_exchange_rates,
     ),
     components(
         schemas(
@@ -128,6 +133,7 @@ impl Modify for SecurityAddon {
             AccountResponse,
             AccountsListResponse,
             AccountsSummary,
+            CurrencySummary,
             AccountsSummaryResponse,
             CreateAccountDto,
             UpdateAccountDto,
@@ -144,6 +150,10 @@ impl Modify for SecurityAddon {
             CreateTransactionDto,
             UpdateTransactionDto,
             CategoriesQueryDto,
+            // Currency schemas
+            CurrencyResponse,
+            CurrenciesListResponse,
+            SyncRatesResponse,
         )
     ),
     modifiers(&SecurityAddon)
