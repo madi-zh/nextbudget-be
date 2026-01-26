@@ -134,11 +134,9 @@ impl AuthService {
         let client = reqwest::Client::new();
         let url = format!("{}?id_token={}", GOOGLE_TOKEN_INFO_URL, id_token);
 
-        let response = client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| AppError::InternalError(format!("Failed to verify Google token: {}", e)))?;
+        let response = client.get(&url).send().await.map_err(|e| {
+            AppError::InternalError(format!("Failed to verify Google token: {}", e))
+        })?;
 
         if !response.status().is_success() {
             return Err(AppError::Unauthorized(

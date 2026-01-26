@@ -142,6 +142,8 @@ async fn main() -> std::io::Result<()> {
             .service(transaction::list_transactions)
             .service(transaction::get_by_category)
             .service(transaction::get_by_categories)
+            .service(transaction::get_by_account)
+            .service(transaction::get_summary)
             .service(transaction::get_transaction)
             .service(transaction::create_transaction)
             .service(transaction::update_transaction)

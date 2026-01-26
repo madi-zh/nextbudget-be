@@ -15,8 +15,10 @@ use crate::category::models::{CategoryResponse, CreateCategoryDto, UpdateCategor
 use crate::currency::models::{CurrenciesListResponse, CurrencyResponse, SyncRatesResponse};
 use crate::errors::ErrorResponse;
 use crate::transaction::models::{
-    CategoriesQueryDto, CreateTransactionDto, PaginatedTransactionResponse, TransactionResponse,
-    TransactionType, UpdateTransactionDto,
+    CategoriesQueryDto, CategorySpendingSummary, CreateTransactionDto, EmbeddedAccountInfo,
+    EmbeddedCategoryInfo, PaginatedDetailedTransactionResponse, PaginatedTransactionResponse,
+    TransactionDetailResponse, TransactionResponse, TransactionSummary, TransactionType,
+    UpdateTransactionDto,
 };
 
 /// Security scheme modifier for Bearer token authentication
@@ -103,6 +105,8 @@ impl Modify for SecurityAddon {
         crate::transaction::handlers::list_transactions,
         crate::transaction::handlers::get_by_category,
         crate::transaction::handlers::get_by_categories,
+        crate::transaction::handlers::get_by_account,
+        crate::transaction::handlers::get_summary,
         crate::transaction::handlers::get_transaction,
         crate::transaction::handlers::create_transaction,
         crate::transaction::handlers::update_transaction,
@@ -146,7 +150,13 @@ impl Modify for SecurityAddon {
             // Transaction schemas
             TransactionType,
             TransactionResponse,
+            TransactionDetailResponse,
+            EmbeddedAccountInfo,
+            EmbeddedCategoryInfo,
             PaginatedTransactionResponse,
+            PaginatedDetailedTransactionResponse,
+            TransactionSummary,
+            CategorySpendingSummary,
             CreateTransactionDto,
             UpdateTransactionDto,
             CategoriesQueryDto,

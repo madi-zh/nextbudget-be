@@ -106,11 +106,9 @@ impl CurrencyService {
 
         // Fetch rates from the API
         let client = reqwest::Client::new();
-        let response = client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| AppError::InternalError(format!("Failed to fetch exchange rates: {}", e)))?;
+        let response = client.get(&url).send().await.map_err(|e| {
+            AppError::InternalError(format!("Failed to fetch exchange rates: {}", e))
+        })?;
 
         if !response.status().is_success() {
             return Err(AppError::InternalError(format!(
@@ -119,10 +117,9 @@ impl CurrencyService {
             )));
         }
 
-        let oxr_response: OxrApiResponse = response
-            .json()
-            .await
-            .map_err(|e| AppError::InternalError(format!("Failed to parse exchange rates: {}", e)))?;
+        let oxr_response: OxrApiResponse = response.json().await.map_err(|e| {
+            AppError::InternalError(format!("Failed to parse exchange rates: {}", e))
+        })?;
 
         let base_currency = oxr_response.base;
         let rate_date = Utc::now().date_naive();

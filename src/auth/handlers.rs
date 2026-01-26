@@ -9,7 +9,9 @@ use super::jwt::{
     create_access_token, decode_token, extract_token, revoke_all_user_tokens, revoke_refresh_token,
     rotate_refresh_token, validate_refresh_token,
 };
-use super::models::{AuthTokenResponse, CreateUserDto, GoogleLoginDto, LoginDto, RefreshTokenDto, UserResponseDto};
+use super::models::{
+    AuthTokenResponse, CreateUserDto, GoogleLoginDto, LoginDto, RefreshTokenDto, UserResponseDto,
+};
 use super::service::AuthService;
 
 /// POST /auth/register - Register a new user
@@ -83,12 +85,9 @@ pub async fn google_login(
     jwt_secret: web::Data<Secret<String>>,
     body: web::Json<GoogleLoginDto>,
 ) -> Result<HttpResponse, AppError> {
-    let response = AuthService::login_with_google(
-        pool.get_ref(),
-        jwt_secret.get_ref(),
-        &body.id_token,
-    )
-    .await?;
+    let response =
+        AuthService::login_with_google(pool.get_ref(), jwt_secret.get_ref(), &body.id_token)
+            .await?;
 
     Ok(HttpResponse::Ok().json(response))
 }

@@ -184,13 +184,12 @@ impl AccountService {
             }
             None => {
                 // Fetch user's default_currency from the users table
-                let default_currency: String = sqlx::query_scalar(
-                    "SELECT default_currency FROM users WHERE id = $1",
-                )
-                .bind(owner_id)
-                .fetch_one(pool)
-                .await
-                .map_err(|e| AppError::InternalError(e.to_string()))?;
+                let default_currency: String =
+                    sqlx::query_scalar("SELECT default_currency FROM users WHERE id = $1")
+                        .bind(owner_id)
+                        .fetch_one(pool)
+                        .await
+                        .map_err(|e| AppError::InternalError(e.to_string()))?;
                 default_currency
             }
         };

@@ -6,17 +6,20 @@ use crate::errors::{AppError, ErrorResponse};
 use crate::extractors::AuthenticatedUser;
 
 use super::models::{
-    CategoriesQueryDto, CategoryIdPath, CreateTransactionDto, PaginatedTransactionResponse,
-    TransactionFilters, TransactionIdPath, TransactionResponse, UpdateTransactionDto,
+    AccountIdPath, CategoriesQueryDto, CategoryIdPath, CreateTransactionDto,
+    PaginatedDetailedTransactionResponse, PaginatedTransactionResponse, SummaryFilters,
+    TransactionFilters, TransactionFiltersDetailed, TransactionIdPath, TransactionResponse,
+    TransactionSummary, UpdateTransactionDto,
 };
 use super::service::TransactionService;
 
 /// GET /transactions - List transactions with optional filters
+/// Use ?detailed=true to include full account/category info in response
 #[utoipa::path(
     get,
     path = "/transactions",
     tag = "Transactions",
-    params(TransactionFilters),
+    params(TransactionFiltersDetailed),
     responses(
         (status = 200, description = "Paginated list of transactions", body = PaginatedTransactionResponse),
         (status = 401, description = "Unauthorized", body = ErrorResponse)
@@ -27,23 +30,55 @@ use super::service::TransactionService;
 pub async fn list_transactions(
     pool: web::Data<PgPool>,
     auth: AuthenticatedUser,
-    query: web::Query<TransactionFilters>,
+    query: web::Query<TransactionFiltersDetailed>,
 ) -> Result<HttpResponse, AppError> {
     query
         .validate()
         .map_err(|e| AppError::ValidationError(e.to_string()))?;
 
-    let (transactions, total) =
-        TransactionService::list_transactions(pool.get_ref(), auth.user_id, &query).await?;
+    if query.detailed {
+        // Return detailed response with embedded account/category info
+        let (transactions, total) =
+            TransactionService::list_transactions_detailed(pool.get_ref(), auth.user_id, &query)
+                .await?;
 
-    let response: Vec<TransactionResponse> = transactions.into_iter().map(Into::into).collect();
+        let response = transactions
+            .into_iter()
+            .map(|row| row.into_response())
+            .collect();
 
-    Ok(HttpResponse::Ok().json(PaginatedTransactionResponse {
-        data: response,
-        total,
-        limit: query.limit,
-        offset: query.offset,
-    }))
+        Ok(
+            HttpResponse::Ok().json(PaginatedDetailedTransactionResponse {
+                data: response,
+                total,
+                limit: query.limit,
+                offset: query.offset,
+            }),
+        )
+    } else {
+        // Return standard response (backwards compatible)
+        let filters = TransactionFilters {
+            start_date: query.start_date,
+            end_date: query.end_date,
+            category_id: query.category_id,
+            account_id: query.account_id,
+            transaction_type: query.transaction_type.clone(),
+            limit: query.limit,
+            offset: query.offset,
+        };
+
+        let (transactions, total) =
+            TransactionService::list_transactions(pool.get_ref(), auth.user_id, &filters).await?;
+
+        let response: Vec<TransactionResponse> = transactions.into_iter().map(Into::into).collect();
+
+        Ok(HttpResponse::Ok().json(PaginatedTransactionResponse {
+            data: response,
+            total,
+            limit: query.limit,
+            offset: query.offset,
+        }))
+    }
 }
 
 /// GET /transactions/category/{category_id} - Get all transactions for a category
@@ -101,6 +136,76 @@ pub async fn get_by_categories(
     let response: Vec<TransactionResponse> = transactions.into_iter().map(Into::into).collect();
 
     Ok(HttpResponse::Ok().json(response))
+}
+
+/// GET /transactions/account/{account_id} - Get all transactions for an account
+#[utoipa::path(
+    get,
+    path = "/transactions/account/{account_id}",
+    tag = "Transactions",
+    params(AccountIdPath, TransactionFilters),
+    responses(
+        (status = 200, description = "Paginated list of transactions for account", body = PaginatedTransactionResponse),
+        (status = 404, description = "Account not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[get("/transactions/account/{account_id}")]
+pub async fn get_by_account(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<AccountIdPath>,
+    query: web::Query<TransactionFilters>,
+) -> Result<HttpResponse, AppError> {
+    query
+        .validate()
+        .map_err(|e| AppError::ValidationError(e.to_string()))?;
+
+    let (transactions, total) =
+        TransactionService::get_by_account(pool.get_ref(), auth.user_id, path.account_id, &query)
+            .await?;
+
+    let response: Vec<TransactionResponse> = transactions.into_iter().map(Into::into).collect();
+
+    Ok(HttpResponse::Ok().json(PaginatedTransactionResponse {
+        data: response,
+        total,
+        limit: query.limit,
+        offset: query.offset,
+    }))
+}
+
+/// GET /transactions/summary - Get transaction summary with totals and category breakdown
+#[utoipa::path(
+    get,
+    path = "/transactions/summary",
+    tag = "Transactions",
+    params(SummaryFilters),
+    responses(
+        (status = 200, description = "Transaction summary", body = TransactionSummary),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[get("/transactions/summary")]
+pub async fn get_summary(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    query: web::Query<SummaryFilters>,
+) -> Result<HttpResponse, AppError> {
+    let (total_income, total_expenses, transaction_count, by_category) =
+        TransactionService::get_summary(pool.get_ref(), auth.user_id, &query).await?;
+
+    let net_change = total_income - total_expenses;
+
+    Ok(HttpResponse::Ok().json(TransactionSummary {
+        total_income,
+        total_expenses,
+        net_change,
+        transaction_count,
+        by_category: by_category.into_iter().map(Into::into).collect(),
+    }))
 }
 
 /// GET /transactions/{id} - Get a specific transaction by ID
