@@ -106,6 +106,7 @@ pub struct GoogleLoginDto {
 
 /// Google token verification response structure
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct GoogleTokenInfo {
     /// Google user ID (subject)
     pub sub: String,

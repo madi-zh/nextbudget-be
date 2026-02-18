@@ -38,13 +38,14 @@ impl TransactionService {
             .await
             .map_err(|e| AppError::InternalError(e.to_string()))?;
 
-        // 1. Verify user owns the category's budget
+        // 1. Verify user owns or is a member of the category's budget
         let category_valid = sqlx::query_scalar::<_, bool>(
             r#"
             SELECT EXISTS(
                 SELECT 1 FROM categories c
                 JOIN budgets b ON c.budget_id = b.id
-                WHERE c.id = $1 AND b.owner_id = $2
+                LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+                WHERE c.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
             )
             "#,
         )
@@ -169,7 +170,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE t.id = $1 AND b.owner_id = $2
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+            WHERE t.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
             FOR UPDATE OF t
             "#,
         )
@@ -230,7 +232,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE t.id = $1 AND b.owner_id = $2
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+            WHERE t.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
             FOR UPDATE OF t
             "#,
         )
@@ -249,7 +252,8 @@ impl TransactionService {
                 SELECT EXISTS(
                     SELECT 1 FROM categories c
                     JOIN budgets b ON c.budget_id = b.id
-                    WHERE c.id = $1 AND b.owner_id = $2
+                    LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+                    WHERE c.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
                 )
                 "#,
             )
@@ -546,7 +550,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE t.id = $1 AND b.owner_id = $2
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+            WHERE t.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
             "#,
         )
         .bind(transaction_id)
@@ -574,7 +579,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE b.owner_id = $1
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
               AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
               AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
               AND ($4::uuid IS NULL OR t.category_id = $4)
@@ -603,7 +609,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE b.owner_id = $1
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
               AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
               AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
               AND ($4::uuid IS NULL OR t.category_id = $4)
@@ -630,13 +637,14 @@ impl TransactionService {
         user_id: Uuid,
         category_id: Uuid,
     ) -> Result<Vec<Transaction>, AppError> {
-        // Verify user owns the category
+        // Verify user owns or is a member of the category's budget
         let category_valid = sqlx::query_scalar::<_, bool>(
             r#"
             SELECT EXISTS(
                 SELECT 1 FROM categories c
                 JOIN budgets b ON c.budget_id = b.id
-                WHERE c.id = $1 AND b.owner_id = $2
+                LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+                WHERE c.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
             )
             "#,
         )
@@ -683,7 +691,8 @@ impl TransactionService {
             SELECT COUNT(DISTINCT c.id)
             FROM categories c
             JOIN budgets b ON c.budget_id = b.id
-            WHERE c.id = ANY($1) AND b.owner_id = $2
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+            WHERE c.id = ANY($1) AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
             "#,
         )
         .bind(&category_ids)
@@ -736,9 +745,10 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
             LEFT JOIN accounts a ON t.account_id = a.id
             LEFT JOIN accounts da ON t.destination_account_id = da.id
-            WHERE b.owner_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
               AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
               AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
               AND ($4::uuid IS NULL OR t.category_id = $4)
@@ -767,7 +777,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE b.owner_id = $1
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
               AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
               AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
               AND ($4::uuid IS NULL OR t.category_id = $4)
@@ -882,7 +893,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE b.owner_id = $1
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
               AND t.transaction_type = 'income'
               AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
               AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
@@ -905,7 +917,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE b.owner_id = $1
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
               AND t.transaction_type = 'expense'
               AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
               AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
@@ -928,7 +941,8 @@ impl TransactionService {
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             JOIN budgets b ON c.budget_id = b.id
-            WHERE b.owner_id = $1
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
               AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
               AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
               AND ($4::uuid IS NULL OR t.account_id = $4)
@@ -953,12 +967,13 @@ impl TransactionService {
                 COUNT(t.id) as transaction_count
             FROM categories c
             JOIN budgets b ON c.budget_id = b.id
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
             LEFT JOIN transactions t ON t.category_id = c.id
                 AND t.transaction_type = 'expense'
                 AND ($2::timestamptz IS NULL OR t.transaction_date >= $2)
                 AND ($3::timestamptz IS NULL OR t.transaction_date <= $3)
                 AND ($4::uuid IS NULL OR t.account_id = $4)
-            WHERE b.owner_id = $1
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
             GROUP BY c.id, c.name, c.color_hex
             HAVING COUNT(t.id) > 0
             ORDER BY total_amount DESC

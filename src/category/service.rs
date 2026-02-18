@@ -16,7 +16,11 @@ impl CategoryService {
         user_id: Uuid,
     ) -> Result<bool, AppError> {
         let result = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM budgets WHERE id = $1 AND owner_id = $2",
+            r#"
+            SELECT COUNT(*) FROM budgets b
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
+            WHERE b.id = $1 AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
+            "#,
         )
         .bind(budget_id)
         .bind(user_id)
@@ -41,9 +45,11 @@ impl CategoryService {
                 c.color_hex, c.created_at, c.updated_at,
                 COALESCE(SUM(CASE WHEN t.transaction_type = 'expense' THEN t.amount ELSE 0 END), 0) as spent_amount
             FROM categories c
-            INNER JOIN budgets b ON c.budget_id = b.id AND b.owner_id = $2
+            INNER JOIN budgets b ON c.budget_id = b.id
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $2
             LEFT JOIN transactions t ON c.id = t.category_id
             WHERE c.id = $1
+              AND (b.owner_id = $2 OR bm.user_id IS NOT NULL)
             GROUP BY c.id, c.budget_id, c.name, c.allocated_amount,
                      c.color_hex, c.created_at, c.updated_at
             "#,
@@ -99,8 +105,10 @@ impl CategoryService {
                 c.color_hex, c.created_at, c.updated_at,
                 COALESCE(SUM(CASE WHEN t.transaction_type = 'expense' THEN t.amount ELSE 0 END), 0) as spent_amount
             FROM categories c
-            INNER JOIN budgets b ON c.budget_id = b.id AND b.owner_id = $1
+            INNER JOIN budgets b ON c.budget_id = b.id
+            LEFT JOIN budget_members bm ON b.id = bm.budget_id AND bm.user_id = $1
             LEFT JOIN transactions t ON c.id = t.category_id
+            WHERE (b.owner_id = $1 OR bm.user_id IS NOT NULL)
             GROUP BY c.id, c.budget_id, c.name, c.allocated_amount,
                      c.color_hex, c.created_at, c.updated_at
             ORDER BY c.name ASC

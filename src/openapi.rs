@@ -9,7 +9,8 @@ use crate::auth::models::{
     AuthTokenResponse, CreateUserDto, GoogleLoginDto, LoginDto, RefreshTokenDto, UserResponseDto,
 };
 use crate::budget::models::{
-    BudgetResponse, CreateBudgetDto, UpdateBudgetDto, UpdateIncomeDto, UpdateSavingsRateDto,
+    BudgetResponse, CreateBudgetDto, CreateSharedBudgetDto, AddMemberDto, MemberResponse,
+    UpdateBudgetDto, UpdateIncomeDto, UpdateSavingsRateDto,
 };
 use crate::category::models::{CategoryResponse, CreateCategoryDto, UpdateCategoryDto};
 use crate::currency::models::{CurrenciesListResponse, CurrencyResponse, SyncRatesResponse};
@@ -66,6 +67,7 @@ impl Modify for SecurityAddon {
         (name = "Accounts", description = "Financial account management"),
         (name = "Categories", description = "Budget category management"),
         (name = "Transactions", description = "Transaction management with atomic balance updates"),
+        (name = "Shared Budgets", description = "Shared budget management and member operations"),
         (name = "Currencies", description = "Currency and exchange rate management")
     ),
     paths(
@@ -85,6 +87,17 @@ impl Modify for SecurityAddon {
         crate::budget::handlers::update_income,
         crate::budget::handlers::update_savings_rate,
         crate::budget::handlers::delete_budget,
+        // Shared budget endpoints
+        crate::budget::handlers::list_shared_budgets,
+        crate::budget::handlers::get_shared_budget,
+        crate::budget::handlers::create_shared_budget,
+        crate::budget::handlers::update_shared_budget,
+        crate::budget::handlers::update_shared_income,
+        crate::budget::handlers::update_shared_savings_rate,
+        crate::budget::handlers::delete_shared_budget,
+        crate::budget::handlers::list_members,
+        crate::budget::handlers::add_member,
+        crate::budget::handlers::remove_member,
         // Account endpoints
         crate::account::handlers::list_accounts,
         crate::account::handlers::get_accounts_summary,
@@ -132,6 +145,10 @@ impl Modify for SecurityAddon {
             UpdateBudgetDto,
             UpdateIncomeDto,
             UpdateSavingsRateDto,
+            // Shared budget schemas
+            CreateSharedBudgetDto,
+            AddMemberDto,
+            MemberResponse,
             // Account schemas
             AccountType,
             AccountResponse,

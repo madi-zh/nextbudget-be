@@ -132,10 +132,10 @@ impl AuthService {
     /// Verify Google ID token with Google's tokeninfo endpoint
     async fn verify_google_token(id_token: &str) -> Result<GoogleTokenInfo, AppError> {
         let client = reqwest::Client::new();
-        let url = format!("{}?id_token={}", GOOGLE_TOKEN_INFO_URL, id_token);
+        let url = format!("{GOOGLE_TOKEN_INFO_URL}?id_token={id_token}");
 
         let response = client.get(&url).send().await.map_err(|e| {
-            AppError::InternalError(format!("Failed to verify Google token: {}", e))
+            AppError::InternalError(format!("Failed to verify Google token: {e}"))
         })?;
 
         if !response.status().is_success() {
@@ -147,7 +147,7 @@ impl AuthService {
         response
             .json::<GoogleTokenInfo>()
             .await
-            .map_err(|e| AppError::InternalError(format!("Failed to parse Google response: {}", e)))
+            .map_err(|e| AppError::InternalError(format!("Failed to parse Google response: {e}")))
     }
 
     /// Find existing user by email or create a new one for Google OAuth

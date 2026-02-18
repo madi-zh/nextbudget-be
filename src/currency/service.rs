@@ -40,7 +40,7 @@ impl CurrencyService {
         .fetch_optional(pool)
         .await
         .map_err(|e| AppError::InternalError(e.to_string()))?
-        .ok_or_else(|| AppError::NotFound(format!("Currency '{}' not found", code_upper)))
+        .ok_or_else(|| AppError::NotFound(format!("Currency '{code_upper}' not found")))
     }
 
     /// Validate that a currency code exists and is active.
@@ -91,8 +91,7 @@ impl CurrencyService {
         .map_err(|e| AppError::InternalError(e.to_string()))?
         .ok_or_else(|| {
             AppError::NotFound(format!(
-                "Exchange rate for {}/{} not found",
-                base_upper, target_upper
+                "Exchange rate for {base_upper}/{target_upper} not found"
             ))
         })
     }
@@ -100,14 +99,13 @@ impl CurrencyService {
     /// Fetch exchange rates from Open Exchange Rates API and store them.
     pub async fn fetch_and_store_rates(pool: &PgPool, api_key: &str) -> Result<usize, AppError> {
         let url = format!(
-            "https://openexchangerates.org/api/latest.json?app_id={}",
-            api_key
+            "https://openexchangerates.org/api/latest.json?app_id={api_key}"
         );
 
         // Fetch rates from the API
         let client = reqwest::Client::new();
         let response = client.get(&url).send().await.map_err(|e| {
-            AppError::InternalError(format!("Failed to fetch exchange rates: {}", e))
+            AppError::InternalError(format!("Failed to fetch exchange rates: {e}"))
         })?;
 
         if !response.status().is_success() {
@@ -118,7 +116,7 @@ impl CurrencyService {
         }
 
         let oxr_response: OxrApiResponse = response.json().await.map_err(|e| {
-            AppError::InternalError(format!("Failed to parse exchange rates: {}", e))
+            AppError::InternalError(format!("Failed to parse exchange rates: {e}"))
         })?;
 
         let base_currency = oxr_response.base;

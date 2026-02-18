@@ -6,8 +6,9 @@ use crate::errors::{AppError, ErrorResponse};
 use crate::extractors::AuthenticatedUser;
 
 use super::models::{
-    BudgetIdPath, BudgetResponse, CreateBudgetDto, ListBudgetsQuery, MonthYearPath,
-    UpdateBudgetDto, UpdateIncomeDto, UpdateSavingsRateDto,
+    BudgetIdPath, BudgetMemberPath, BudgetResponse, CreateBudgetDto, CreateSharedBudgetDto,
+    AddMemberDto, ListBudgetsQuery, MemberResponse, MonthYearPath, UpdateBudgetDto,
+    UpdateIncomeDto, UpdateSavingsRateDto,
 };
 use super::service::BudgetService;
 
@@ -37,7 +38,7 @@ pub async fn list_budgets(
 
     let response: Vec<BudgetResponse> = budgets
         .into_iter()
-        .map(BudgetResponse::from_budget)
+        .map(|b| BudgetResponse::from_budget(b, true))
         .collect();
 
     Ok(HttpResponse::Ok().json(response))
@@ -64,7 +65,7 @@ pub async fn get_budget(
 ) -> Result<HttpResponse, AppError> {
     let budget = BudgetService::get_budget_by_id(pool.get_ref(), path.id, auth.user_id).await?;
 
-    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget)))
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, true)))
 }
 
 /// GET /budgets/month/{month}/year/{year} - Get budget for specific month/year
@@ -97,7 +98,7 @@ pub async fn get_budget_by_month_year(
     )
     .await?;
 
-    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget)))
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, true)))
 }
 
 /// POST /budgets - Create a new budget
@@ -127,7 +128,7 @@ pub async fn create_budget(
 
     let budget = BudgetService::create_budget(pool.get_ref(), auth.user_id, &body).await?;
 
-    Ok(HttpResponse::Created().json(BudgetResponse::from_budget(budget)))
+    Ok(HttpResponse::Created().json(BudgetResponse::from_budget(budget, true)))
 }
 
 /// PATCH /budgets/{id} - Update a budget (partial update)
@@ -159,7 +160,7 @@ pub async fn update_budget(
 
     let budget = BudgetService::update_budget(pool.get_ref(), path.id, auth.user_id, &body).await?;
 
-    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget)))
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, true)))
 }
 
 /// PATCH /budgets/{id}/income - Update income only
@@ -189,7 +190,7 @@ pub async fn update_income(
 
     let budget = BudgetService::update_income(pool.get_ref(), path.id, auth.user_id, &body).await?;
 
-    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget)))
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, true)))
 }
 
 /// PATCH /budgets/{id}/savings-rate - Update savings rate only
@@ -220,7 +221,7 @@ pub async fn update_savings_rate(
     let budget =
         BudgetService::update_savings_rate(pool.get_ref(), path.id, auth.user_id, &body).await?;
 
-    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget)))
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, true)))
 }
 
 /// DELETE /budgets/{id} - Delete a budget
@@ -244,5 +245,271 @@ pub async fn delete_budget(
 ) -> Result<HttpResponse, AppError> {
     BudgetService::delete_budget(pool.get_ref(), path.id, auth.user_id).await?;
 
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// GET /shared-budgets - List shared budgets
+#[utoipa::path(
+    get,
+    path = "/shared-budgets",
+    tag = "Shared Budgets",
+    params(ListBudgetsQuery),
+    responses(
+        (status = 200, description = "List of shared budgets", body = Vec<BudgetResponse>),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[get("/shared-budgets")]
+pub async fn list_shared_budgets(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    query: web::Query<ListBudgetsQuery>,
+) -> Result<HttpResponse, AppError> {
+    query.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    let budgets = BudgetService::list_shared_budgets(pool.get_ref(), auth.user_id, &query).await?;
+    let response: Vec<BudgetResponse> = budgets
+        .into_iter()
+        .map(|b| {
+            let is_owner = b.owner_id == auth.user_id;
+            BudgetResponse::from_budget(b, is_owner)
+        })
+        .collect();
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/// GET /shared-budgets/{id} - Get a shared budget
+#[utoipa::path(
+    get,
+    path = "/shared-budgets/{id}",
+    tag = "Shared Budgets",
+    params(BudgetIdPath),
+    responses(
+        (status = 200, description = "Shared budget details", body = BudgetResponse),
+        (status = 404, description = "Not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[get("/shared-budgets/{id}")]
+pub async fn get_shared_budget(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetIdPath>,
+) -> Result<HttpResponse, AppError> {
+    let budget = BudgetService::get_shared_budget(pool.get_ref(), path.id, auth.user_id).await?;
+    let is_owner = budget.owner_id == auth.user_id;
+    let members = BudgetService::list_members(pool.get_ref(), path.id, auth.user_id).await?;
+    let mut response = BudgetResponse::from_budget(budget, is_owner);
+    response.members = Some(members);
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/// POST /shared-budgets - Create a shared budget
+#[utoipa::path(
+    post,
+    path = "/shared-budgets",
+    tag = "Shared Budgets",
+    request_body = CreateSharedBudgetDto,
+    responses(
+        (status = 201, description = "Shared budget created", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[post("/shared-budgets")]
+pub async fn create_shared_budget(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    body: web::Json<CreateSharedBudgetDto>,
+) -> Result<HttpResponse, AppError> {
+    body.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    body.validate_decimals().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    let budget = BudgetService::create_shared_budget(pool.get_ref(), auth.user_id, &body).await?;
+    Ok(HttpResponse::Created().json(BudgetResponse::from_budget(budget, true)))
+}
+
+/// PATCH /shared-budgets/{id} - Update a shared budget
+#[utoipa::path(
+    patch,
+    path = "/shared-budgets/{id}",
+    tag = "Shared Budgets",
+    params(BudgetIdPath),
+    request_body = UpdateBudgetDto,
+    responses(
+        (status = 200, description = "Shared budget updated", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[patch("/shared-budgets/{id}")]
+pub async fn update_shared_budget(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetIdPath>,
+    body: web::Json<UpdateBudgetDto>,
+) -> Result<HttpResponse, AppError> {
+    body.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    body.validate_decimals().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    let budget = BudgetService::update_shared_budget(pool.get_ref(), path.id, auth.user_id, &body).await?;
+    let is_owner = budget.owner_id == auth.user_id;
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, is_owner)))
+}
+
+/// PATCH /shared-budgets/{id}/income - Update shared budget income
+#[utoipa::path(
+    patch,
+    path = "/shared-budgets/{id}/income",
+    tag = "Shared Budgets",
+    params(BudgetIdPath),
+    request_body = UpdateIncomeDto,
+    responses(
+        (status = 200, description = "Income updated", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[patch("/shared-budgets/{id}/income")]
+pub async fn update_shared_income(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetIdPath>,
+    body: web::Json<UpdateIncomeDto>,
+) -> Result<HttpResponse, AppError> {
+    body.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    let budget = BudgetService::update_shared_income(pool.get_ref(), path.id, auth.user_id, &body).await?;
+    let is_owner = budget.owner_id == auth.user_id;
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, is_owner)))
+}
+
+/// PATCH /shared-budgets/{id}/savings-rate - Update shared budget savings rate
+#[utoipa::path(
+    patch,
+    path = "/shared-budgets/{id}/savings-rate",
+    tag = "Shared Budgets",
+    params(BudgetIdPath),
+    request_body = UpdateSavingsRateDto,
+    responses(
+        (status = 200, description = "Savings rate updated", body = BudgetResponse),
+        (status = 400, description = "Validation error", body = ErrorResponse),
+        (status = 404, description = "Not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[patch("/shared-budgets/{id}/savings-rate")]
+pub async fn update_shared_savings_rate(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetIdPath>,
+    body: web::Json<UpdateSavingsRateDto>,
+) -> Result<HttpResponse, AppError> {
+    body.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    let budget = BudgetService::update_shared_savings_rate(pool.get_ref(), path.id, auth.user_id, &body).await?;
+    let is_owner = budget.owner_id == auth.user_id;
+    Ok(HttpResponse::Ok().json(BudgetResponse::from_budget(budget, is_owner)))
+}
+
+/// DELETE /shared-budgets/{id} - Delete a shared budget (owner only)
+#[utoipa::path(
+    delete,
+    path = "/shared-budgets/{id}",
+    tag = "Shared Budgets",
+    params(BudgetIdPath),
+    responses(
+        (status = 204, description = "Shared budget deleted"),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 404, description = "Not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[delete("/shared-budgets/{id}")]
+pub async fn delete_shared_budget(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetIdPath>,
+) -> Result<HttpResponse, AppError> {
+    BudgetService::delete_shared_budget(pool.get_ref(), path.id, auth.user_id).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// GET /shared-budgets/{id}/members - List members
+#[utoipa::path(
+    get,
+    path = "/shared-budgets/{id}/members",
+    tag = "Shared Budgets",
+    params(BudgetIdPath),
+    responses(
+        (status = 200, description = "List of members", body = Vec<MemberResponse>),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[get("/shared-budgets/{id}/members")]
+pub async fn list_members(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetIdPath>,
+) -> Result<HttpResponse, AppError> {
+    let members = BudgetService::list_members(pool.get_ref(), path.id, auth.user_id).await?;
+    Ok(HttpResponse::Ok().json(members))
+}
+
+/// POST /shared-budgets/{id}/members - Add a member (owner only)
+#[utoipa::path(
+    post,
+    path = "/shared-budgets/{id}/members",
+    tag = "Shared Budgets",
+    params(BudgetIdPath),
+    request_body = AddMemberDto,
+    responses(
+        (status = 201, description = "Member added", body = MemberResponse),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 404, description = "User not found", body = ErrorResponse),
+        (status = 409, description = "Already a member", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[post("/shared-budgets/{id}/members")]
+pub async fn add_member(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetIdPath>,
+    body: web::Json<AddMemberDto>,
+) -> Result<HttpResponse, AppError> {
+    body.validate().map_err(|e| AppError::ValidationError(e.to_string()))?;
+    let member = BudgetService::add_member(pool.get_ref(), path.id, auth.user_id, &body.email).await?;
+    Ok(HttpResponse::Created().json(member))
+}
+
+/// DELETE /shared-budgets/{id}/members/{user_id} - Remove a member (owner only)
+#[utoipa::path(
+    delete,
+    path = "/shared-budgets/{id}/members/{user_id}",
+    tag = "Shared Budgets",
+    params(BudgetMemberPath),
+    responses(
+        (status = 204, description = "Member removed"),
+        (status = 403, description = "Forbidden", body = ErrorResponse),
+        (status = 404, description = "Member not found", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    ),
+    security(("bearer_auth" = []))
+)]
+#[delete("/shared-budgets/{id}/members/{user_id}")]
+pub async fn remove_member(
+    pool: web::Data<PgPool>,
+    auth: AuthenticatedUser,
+    path: web::Path<BudgetMemberPath>,
+) -> Result<HttpResponse, AppError> {
+    BudgetService::remove_member(pool.get_ref(), path.id, auth.user_id, path.user_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }

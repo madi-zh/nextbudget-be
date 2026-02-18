@@ -8,6 +8,7 @@ use utoipa::ToSchema;
 pub enum AppError {
     ValidationError(String),
     Unauthorized(String),
+    Forbidden(String),
     NotFound(String),
     Conflict(String),
     InternalError(String),
@@ -29,6 +30,7 @@ impl fmt::Display for AppError {
         match self {
             AppError::ValidationError(msg) => write!(f, "Validation error: {msg}"),
             AppError::Unauthorized(msg) => write!(f, "Unauthorized: {msg}"),
+            AppError::Forbidden(msg) => write!(f, "Forbidden: {msg}"),
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
             AppError::Conflict(msg) => write!(f, "Conflict: {msg}"),
             AppError::InternalError(msg) => write!(f, "Internal error: {msg}"),
@@ -47,6 +49,11 @@ impl ResponseError for AppError {
             AppError::Unauthorized(msg) => (
                 actix_web::http::StatusCode::UNAUTHORIZED,
                 "UNAUTHORIZED",
+                msg.clone(),
+            ),
+            AppError::Forbidden(msg) => (
+                actix_web::http::StatusCode::FORBIDDEN,
+                "FORBIDDEN",
                 msg.clone(),
             ),
             AppError::NotFound(msg) => (

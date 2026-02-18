@@ -176,8 +176,7 @@ impl AccountService {
                 let is_valid = CurrencyService::validate_currency(pool, code).await?;
                 if !is_valid {
                     return Err(AppError::ValidationError(format!(
-                        "Currency '{}' is not valid or not active",
-                        code
+                        "Currency '{code}' is not valid or not active"
                     )));
                 }
                 code.to_uppercase()
